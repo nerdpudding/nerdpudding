@@ -1,5 +1,7 @@
 ### Hi there 👋
 
+🌱 I’m currently studying software development. I just started learning OOP with C# and have some basic knowledge of C and Python as well, but still have a lot to learn. I have worked with Visual Studio and Visual Studio Code so far and am now exploring more about GitHub, which led me to create this profile. There isn’t much in here yet, but that might change!
+
 <!--
 **nerdpudding/nerdpudding** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
 
