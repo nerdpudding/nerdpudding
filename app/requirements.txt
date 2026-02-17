@@ -1,0 +1,30 @@
+# PyTorch (CUDA 12.x)
+torch==2.7.1
+torchvision==0.22.1
+triton==3.3.1
+
+# Model
+transformers==4.51.0
+librosa
+soundfile
+accelerate==1.9.0
+einops==0.8.1
+timm==1.0.19
+safetensors==0.5.3
+tokenizers==0.21.4
+huggingface-hub==0.34.3
+
+# Server
+fastapi==0.116.1
+uvicorn==0.35.0
+
+# Frame capture
+opencv-python-headless
+
+# Core
+numpy==2.2.6
+pillow==11.3.0
+tqdm==4.67.1
+PyYAML==6.0.2
+requests==2.32.4
+psutil==7.0.0

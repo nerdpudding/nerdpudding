@@ -98,4 +98,7 @@ See the [Project hierarchy](AI_INSTRUCTIONS.md#project-hierarchy) in AI_INSTRUCT
 - [AI Instructions](AI_INSTRUCTIONS.md) -- project rules, hierarchy, agent table
 - [Detailed Concept](concepts/concept.md) -- full concept with diagrams and technical details
 - [Roadmap](roadmap.md) -- project roadmap
-- [docs/](docs/) -- guides, tutorials, and reference documentation
+- [Sprint 1 Log](SPRINT1_LOG.md) -- setup steps, test results, findings
+- [Model Patches](docs/model_patches.md) -- patches applied to model files (must reapply after update)
+- [Lessons Learned](docs/lessons_learned.md) -- what worked and didn't (context for AI assistants)
+- [docs/](docs/) -- all guides and reference documentation

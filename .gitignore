@@ -34,7 +34,9 @@ Thumbs.db
 *.pem
 *.key
 
-# Models (too large for git)
+# Models and HuggingFace cache (too large for git)
+models/
+.hf_cache/
 *.bin
 *.safetensors
 *.gguf

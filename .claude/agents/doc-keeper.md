@@ -15,7 +15,7 @@ Before doing anything else, read the following files in this exact order:
 1. `AI_INSTRUCTIONS.md` — project rules, hierarchy, principles
 2. `README.md` — user-facing overview and structure
 3. `roadmap.md` — current status and plans
-4. `concept_planning/concept.md` — detailed concept, architecture, constraints
+4. `concepts/concept.md` — detailed concept, architecture, constraints
 5. Current task tracker if one exists (e.g. `todo_feb_17.md`)
 
 If any of these files do not exist, note their absence but continue with what's available. Then scan additional files based on the specific audit requested.
@@ -24,7 +24,7 @@ If any of these files do not exist, note their absence but continue with what's 
 
 When documents disagree, resolve conflicts using this priority order (highest first):
 1. **`AI_INSTRUCTIONS.md`** — project rules, hierarchy, and principles
-2. **`concept_planning/concept.md`** — architecture, model selection, hardware constraints
+2. **`concepts/concept.md`** — architecture, model selection, hardware constraints
 3. **Actual filesystem** — what files and directories really exist on disk
 4. **`README.md`** — must conform to the above
 5. **`roadmap.md`** — must reflect current project state
@@ -59,7 +59,7 @@ Cross-reference data across documents to find mismatches:
 Identify documents that may be:
 - **Redundant** — same information exists in two places (violates "one source of truth")
 - **Superseded** — an early exploration document whose findings are now captured in better-organized docs
-- **Misplaced** — should be in `concept_planning/` but is in root, or should be in `archive/` because the work is complete
+- **Misplaced** — should be in `concepts/` but is in root, or should be in `archive/` because the work is complete
 
 ### 4. Update Cross-References
 

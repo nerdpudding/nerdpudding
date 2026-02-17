@@ -13,6 +13,8 @@ Proof-of-concept application for real-time video conversation with a multimodal 
 - **Keep everything up to date** — after any change, verify that READMEs, docs, agent instructions, and config files still reflect reality. Stale docs are worse than no docs.
 - **Use agents when their role fits** — don't do manually what an agent is designed for. Check the agents table below before starting a task.
 - **ALL code, docs, comments, plans, and commit messages MUST be in English** — always, no exceptions. The user often communicates in Dutch, but everything written to files must be English.
+- **Learn from mistakes** — when an approach fails or wastes effort, document it in `docs/lessons_learned.md`. This file is persistent context for AI assistants to avoid repeating the same mistakes. Update it whenever a significant lesson emerges (failed approach, wrong assumption, better workflow discovered).
+- **Research before coding** — when integrating with external code (model libraries, APIs, demos), thoroughly trace the actual code paths before writing integration code. Don't iterate by trial-and-error. Use the repo-researcher agent for this.
 - **Build on existing work** — evaluate and adapt code from the cloned repos before writing from scratch.
 - **Local-first** — everything runs on the local machine, no cloud dependencies.
 - **Docker where possible** — containerized services for reproducibility.
@@ -34,11 +36,25 @@ For non-trivial changes, follow this order:
 .
 ├── AI_INSTRUCTIONS.md                # THIS FILE — read first
 ├── README.md                         # Project overview, hardware, use cases
+├── SPRINT1_LOG.md                    # Sprint 1 progress log: setup steps, test results, findings
 ├── roadmap.md                        # Project roadmap and sprint status
 ├── todo_feb_17.md                    # Daily task tracker
+├── app/                              # Application code
+│   ├── __init__.py
+│   ├── config.py                     # All configuration (env var overridable)
+│   ├── model_server.py               # Model loading + inference
+│   └── requirements.txt              # Python dependencies
+├── scripts/                          # Standalone utility scripts
+│   └── test_model.py                 # Model loading + inference test
+├── models/                           # Downloaded model files (git-ignored, ~19 GB)
+│   └── MiniCPM-o-4_5/               # Full BF16 model + patched model code
+├── test_files/                       # Test assets (images, videos)
+│   └── images/
 ├── concepts/
 │   └── concept.md                    # Detailed concept: architecture, model selection, constraints
 ├── docs/                             # Guides, tutorials, and reference documentation
+│   ├── model_patches.md              # Patches applied to model files (must reapply after update)
+│   └── lessons_learned.md            # What worked and didn't (context for AI assistants)
 ├── MiniCPM-o/                        # Official model repo (cloned, do not modify)
 ├── MiniCPM-V-CookBook/              # Cookbook with demos (cloned, do not modify)
 ├── claude_plans/                     # Active plans (see Plan rules below)
@@ -51,7 +67,7 @@ For non-trivial changes, follow this order:
         └── repo-researcher.md        # Read-only research of cloned reference repos
 ```
 
-**Note:** The cloned repos (`MiniCPM-o/`, `MiniCPM-V-CookBook/`) are reference material. Read from them freely, but do not modify their contents. Our own application code will live in separate directories as it gets built.
+**Note:** The cloned repos (`MiniCPM-o/`, `MiniCPM-V-CookBook/`) are reference material. Read from them freely, but do not modify their contents. The `models/` directory contains downloaded model files (git-ignored) with a required patch -- see `docs/model_patches.md`.
 
 ## Agents
 

@@ -207,7 +207,7 @@ Document findings in `docs/` for Sprint 2 implementation. Sprint 1 uses direct O
 ## Configuration Defaults
 
 ```
-MODEL_PATH=~/models/MiniCPM-o-4_5
+MODEL_PATH=models/MiniCPM-o-4_5
 CAPTURE_FPS=1.0
 WINDOW_SIZE=16
 FRAMES_PER_INFERENCE=8
