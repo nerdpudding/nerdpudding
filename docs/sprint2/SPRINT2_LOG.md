@@ -178,3 +178,119 @@ Cycle 7: inference=1.64s, target_delay=3.29s
 With Steps 1, 1b, and 2 done, the project has a successful proof of concept: smooth native-rate video playback with real-time AI commentary, adaptively synchronized, running on consumer GPU hardware (~8.6 GB VRAM). All subsequent steps (TTS, LiveKit, Docker, etc.) are enhancements to an already working system.
 
 ---
+
+## Step 3: TTS Integration
+
+### Research findings
+
+Before writing any code, the TTS code paths in both model variants were traced using the repo-researcher agent. This revealed critical differences between the AWQ and BF16 model files.
+
+**TTS architecture — two separate components:**
+
+1. **TTS neural network** ("the brain"): A LlamaModel-based decoder that converts text into audio tokens. 194 weight tensors (`tts.*`) stored in the AWQ model's safetensors files. These are NOT quantized — they run in native precision even in the AWQ model. Loaded automatically when `init_tts: true` is set in `config.json` (which it is by default). No extra VRAM cost — already included in the ~8.6 GB.
+
+2. **Token2wav vocoder** ("the voice"): A separate model (`stepaudio2.Token2wav`) that converts audio tokens into actual waveforms. Loaded from `assets/token2wav/` (~1.2 GB on disk). With `enable_float16=True`, uses ~0.6-0.7 GB VRAM.
+
+**Critical AWQ vs BF16 difference in `init_tts()`:**
+
+| Feature | AWQ model | BF16 model |
+|---------|-----------|------------|
+| `init_tts()` default vocoder | CosyVoice2 (incompatible with streaming) | Token2wav (works with streaming) |
+| `streaming` parameter | Required (`streaming=True`) | Does not exist (always Token2wav) |
+| `assets/` directory | **Missing entirely** | Present + auto-download |
+| Auto-download of assets | No | Yes (`_ensure_asset_dir()`) |
+
+The AWQ model's `modeling_minicpmo.py` is an older version of the code. Without `streaming=True`, it loads CosyVoice2, which crashes when `streaming_generate(generate_audio=True)` is called.
+
+**Correct initialization for AWQ:**
+
+```python
+# Vocoder — MUST use streaming=True for AWQ
+# Assets copied into AWQ dir (see docs/model_patches.md #4)
+model.init_tts(
+    streaming=True,
+    model_dir="models/MiniCPM-o-4_5-awq/assets/token2wav",
+    enable_float16=False,  # True crashes due to stepaudio2 dtype bug
+)
+
+# Reference audio — 16kHz mono numpy array
+ref_audio, _ = librosa.load("models/MiniCPM-o-4_5-awq/assets/HT_ref_audio.wav", sr=16000, mono=True)
+model.init_token2wav_cache(prompt_speech_16k=ref_audio)
+```
+
+**Streaming API (simplex, not duplex):**
+
+```python
+# Per inference cycle:
+model.streaming_prefill(session_id=sid, msgs=[user_msg], is_last_chunk=True)
+for wav_chunk, text_chunk in model.streaming_generate(
+    session_id=sid, generate_audio=True, use_tts_template=True
+):
+    # wav_chunk: torch.Tensor (1, ~24000), 24kHz float32, ~1 second per chunk
+    # text_chunk: str (incremental)
+    # Final iteration yields (None, None) as sentinel
+```
+
+**VRAM budget with TTS:**
+
+| Component | VRAM |
+|-----------|------|
+| AWQ model (LLM + vision + TTS weights) | ~8.6 GB |
+| Token2wav vocoder (float32, float16 broken) | ~1.2 GB |
+| KV cache during inference | ~2-3 GB |
+| **Total measured** | **~12.1 GB allocated** |
+
+~12 GB headroom on RTX 4090.
+
+**Dependencies:** `minicpmo-utils[all]>=1.0.5` (provides `stepaudio2.Token2wav`), `torchaudio`, `librosa`.
+
+**Simplex vs duplex:** Simplex (`streaming_prefill` + `streaming_generate`) is correct for our use case. Duplex (`model.as_duplex()`) adds VAD, listen/speak state machine, and continuous audio streaming — overkill for our pattern of frames + text in, text + audio out.
+
+### Implementation
+
+**Assets setup:** Copied `assets/` directory from BF16 model into AWQ directory (~1.3 GB). This makes the AWQ model self-contained — no dependency on BF16 model being present. Documented in `docs/model_patches.md` as patch #4.
+
+**Code changes:**
+
+- `app/config.py` -- Added `ENABLE_TTS` (default false), `TTS_MODEL_DIR`, `REF_AUDIO_PATH`, `TTS_FLOAT16` (default false due to bug)
+- `app/model_server.py` -- Added `InferenceResult` dataclass, `_init_tts()` method (AWQ-aware vocoder init + ref audio cache), `infer_with_audio()` method using `streaming_prefill`/`streaming_generate`. Text-only `infer()` kept for backward compatibility.
+- `app/requirements.txt` -- Added `minicpmo-utils[all]>=1.0.5`, `torchaudio`
+- New: `scripts/test_tts.py` -- Test script: load with TTS, inference on image/video, save audio to WAV
+
+**Key design:** `ModelServer` has two inference methods:
+- `infer()` — text-only via `model.chat()` (existing, backward compatible)
+- `infer_with_audio()` — yields `InferenceResult(text, audio, is_last)` via `streaming_prefill`/`streaming_generate`. Falls back to wrapping `infer()` when TTS disabled.
+
+### Bugs found and fixed
+
+**Bug 1 — float16 vocoder dtype mismatch:**
+`enable_float16=True` causes `RuntimeError: mat1 and mat2 must have the same dtype, but got Float and Half` in `stepaudio2.flow.setup_cache()`. The flow model's `spk_embed_affine_layer` has float16 weights but receives float32 speaker embeddings from the campplus ONNX extractor. This is a bug in stepaudio2, not our code.
+
+Fix: changed `TTS_FLOAT16` default to `false`. Uses ~1.2 GB VRAM instead of ~0.6 GB. Acceptable on RTX 4090.
+
+**Bug 2 — minicpmo-utils overrides torch version:**
+`pip install minicpmo-utils[all]` pulled in torch 2.10.0, overriding our pinned torch==2.7.1. Also downgraded pillow and librosa to incompatible versions.
+
+Fix: reinstalled pinned versions (`torch==2.7.1`, `torchvision==0.22.1`, `torchaudio==2.7.1`, `pillow==11.3.0`, `librosa==0.11.0`). The version conflict warnings from pip are harmless — stepaudio2 works fine with our versions.
+
+### Test results
+
+| Metric | Text-only | TTS (detailed prompt) | TTS (short prompt) |
+|--------|-----------|----------------------|-------------------|
+| VRAM (allocated) | ~8.6 GB | ~12.1 GB | ~12.1 GB |
+| Inference time | ~1.6s | ~39s (870 chars) | ~5.0s (112 chars) |
+| Audio output | N/A | 60.4s | 6.4s |
+| Text quality | Good | Good | Good |
+
+The ~5s inference with short prompt (1-2 sentences) is what we expect in the monitor loop with the commentator prompt.
+
+### Config (all env-var overridable)
+
+| Setting | Default | Purpose |
+|---------|---------|---------|
+| `ENABLE_TTS` | false | Enable TTS audio output |
+| `TTS_MODEL_DIR` | `{MODEL_PATH}/assets/token2wav` | Path to Token2wav vocoder |
+| `REF_AUDIO_PATH` | `{MODEL_PATH}/assets/HT_ref_audio.wav` | Reference audio for voice |
+| `TTS_FLOAT16` | false | Float16 vocoder (currently broken, see Bug 1) |
+
+---

@@ -22,7 +22,7 @@ Local, GPU-accelerated application for real-time video conversation with a multi
 - NVIDIA GPU with ~10 GB VRAM (tested on RTX 4090, ~8.6 GB used with default AWQ model; BF16 fallback needs ~18.5 GB)
 - CUDA 12.x installed
 - Miniconda or Anaconda
-- ~8 GB disk space for AWQ model (~20 GB if also downloading BF16)
+- ~10 GB disk space for AWQ model + TTS assets (~30 GB if also downloading BF16)
 
 ### Quick Start
 
@@ -42,18 +42,24 @@ pip install -r app/requirements.txt
 # 2. Download AWQ INT4 model (~8 GB, default)
 huggingface-cli download openbmb/MiniCPM-o-4_5-awq --local-dir models/MiniCPM-o-4_5-awq
 
-# Optional: download BF16 model (~19 GB, for comparison or fallback)
+# 3. Download TTS assets (~1.2 GB vocoder + reference audio)
+#    The AWQ model needs these from the BF16 model's assets directory.
+#    Download BF16 model and copy assets, or download assets only:
+huggingface-cli download openbmb/MiniCPM-o-4_5 --local-dir models/MiniCPM-o-4_5 --include "assets/*"
+cp -r models/MiniCPM-o-4_5/assets models/MiniCPM-o-4_5-awq/assets
+
+# Optional: download full BF16 model (~19 GB, for comparison or fallback)
 # huggingface-cli download openbmb/MiniCPM-o-4_5 --local-dir models/MiniCPM-o-4_5
 
-# 3. Apply required model patches (see docs/model_patches.md for all patches)
+# 4. Apply required model patches (see docs/model_patches.md for all patches)
 #    AWQ model needs config.json fix + streaming fix in modeling_minicpmo.py
 #    BF16 model (if downloaded) needs streaming fix in modeling_minicpmo.py
 
-# 4. Start the server
+# 5. Start the server
 python -m app.main
 # Server starts on http://localhost:8199
 
-# 5. Open browser to http://localhost:8199
+# 6. Open browser to http://localhost:8199
 #    - Enter a video source (file path, device ID, or stream URL)
 #    - Click Start — smooth video plays at native frame rate (MJPEG)
 #    - Type an instruction (e.g. "describe what you see") and press Send

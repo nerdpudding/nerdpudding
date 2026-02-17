@@ -85,3 +85,35 @@ grep -n "PATCH: chat" models/MiniCPM-o-4_5-awq/modeling_minicpmo.py
 ```
 
 Should show the patch comment around line 1198-1201.
+
+## 4. TTS assets for AWQ model
+
+**Directory:** `models/MiniCPM-o-4_5-awq/assets/`
+**Source:** Copied from `models/MiniCPM-o-4_5/assets/`
+
+### Problem
+
+The AWQ model download does not include the `assets/` directory. This directory contains the Token2wav vocoder (~1.2 GB) needed for TTS audio generation, plus reference audio files for voice cloning.
+
+Without these assets, `model.init_tts(streaming=True)` fails because it cannot find the vocoder model files (`flow.pt`, `hift.pt`, `speech_tokenizer_v2_25hz.onnx`, `campplus.onnx`).
+
+### Fix
+
+Copy the entire `assets/` directory from the BF16 model into the AWQ model directory:
+
+```bash
+# If BF16 model is already downloaded:
+cp -r models/MiniCPM-o-4_5/assets models/MiniCPM-o-4_5-awq/assets
+
+# Or download just the assets from HuggingFace:
+huggingface-cli download openbmb/MiniCPM-o-4_5 --local-dir models/MiniCPM-o-4_5 --include "assets/*"
+cp -r models/MiniCPM-o-4_5/assets models/MiniCPM-o-4_5-awq/assets
+```
+
+### How to verify
+
+```bash
+ls models/MiniCPM-o-4_5-awq/assets/token2wav/
+```
+
+Should show: `campplus.onnx`, `flow.pt`, `flow.yaml`, `hift.pt`, `speech_tokenizer_v2_25hz.onnx`.

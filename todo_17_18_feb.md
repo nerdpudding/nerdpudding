@@ -5,7 +5,7 @@
 - [x] Step 1: AWQ model support (download, auto-detect, test VRAM + quality)
 - [x] Step 1b: Latency optimization (frame striding, tuned defaults)
 - [x] Step 2: MJPEG streaming with adaptive sync (native FPS display, EMA delay)
-- [ ] Step 3: TTS integration (streaming_prefill/generate, InferenceResult, test audio)
+- [x] Step 3: TTS integration (streaming_prefill/generate, InferenceResult, test audio)
 - [ ] Step 4: Audio delivery pipeline (AudioManager, resampling, /api/audio-stream)
 - [ ] Step 5: Docker setup (Dockerfile, docker-compose, .env.example, LiveKit config)
 - [ ] Step 6: LiveKit WebRTC (bot, frame_provider, token endpoint, frontend)

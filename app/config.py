@@ -129,3 +129,23 @@ STREAM_DELAY_INIT = float(os.getenv("STREAM_DELAY_INIT", "5.0"))
 # more jittery. Lower = smoother but slower to respond to changes.
 # 0.2 is a good default: adapts within ~5 cycles.
 STREAM_DELAY_EMA_ALPHA = float(os.getenv("STREAM_DELAY_EMA_ALPHA", "0.2"))
+
+# ---------------------------------------------------------------------------
+# TTS (text-to-speech)
+# ---------------------------------------------------------------------------
+# Enable TTS audio output. When true, the model generates audio alongside text.
+# Adds ~0.6-0.7 GB VRAM for the Token2wav vocoder (float16).
+# Requires assets/token2wav/ in the model directory (see docs/model_patches.md).
+ENABLE_TTS = os.getenv("ENABLE_TTS", "false").lower() == "true"
+
+# Path to the Token2wav vocoder model files.
+# Default: assets/token2wav/ inside the model directory.
+TTS_MODEL_DIR = os.getenv("TTS_MODEL_DIR", os.path.join(MODEL_PATH, "assets", "token2wav"))
+
+# Path to the reference audio file for voice cloning.
+# Must be a WAV file. Loaded at 16kHz mono.
+REF_AUDIO_PATH = os.getenv("REF_AUDIO_PATH", os.path.join(MODEL_PATH, "assets", "HT_ref_audio.wav"))
+
+# Use float16 for the Token2wav vocoder. Saves ~50% VRAM but currently crashes
+# with stepaudio2 due to dtype mismatch in flow.setup_cache(). Keep false until fixed.
+TTS_FLOAT16 = os.getenv("TTS_FLOAT16", "false").lower() == "true"
