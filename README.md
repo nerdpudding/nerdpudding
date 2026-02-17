@@ -30,7 +30,9 @@ These repos are used as reference material only -- see [Resources](#resources) f
 
 ## Goal
 
-Stream live video from any source into **MiniCPM-o 4.5** and have a natural conversation about what it sees. Text chat first, voice interaction later.
+Stream live video from any source into **MiniCPM-o 4.5** and have a real-time conversation about what it sees -- like a live commentator that watches along and responds to your directions.
+
+The AI **continuously monitors** the video stream and narrates or answers based on a sliding window of recent frames. The user can steer the AI's focus at any time (e.g., "only tell me what the dog does"). This is not video upload + batch processing -- it's live, continuous, and steerable. Text chat first, voice interaction later.
 
 ## Architecture Overview
 
@@ -52,13 +54,14 @@ Video Source  --->  Model Server (MiniCPM-o 4.5)  --->  Web UI
 
 ## Model
 
-**MiniCPM-o 4.5** -- omni-modal model (vision + audio + text), 9B parameters.
+**[MiniCPM-o 4.5](https://huggingface.co/openbmb/MiniCPM-o-4_5)** -- omni-modal model (vision + audio/STT + TTS), 9B parameters. Supports video understanding up to 10 FPS, speech recognition, text-to-speech, and full-duplex streaming -- all in one model.
 
-| Variant | VRAM | Notes |
-|---------|------|-------|
-| Full (BF16) | ~19 GB | Primary target for RTX 4090 |
-| GGUF | ~10 GB | Fallback if VRAM constrained |
-| AWQ | ~11 GB | Alternative quantized option |
+| Variant | VRAM | Backend | Link |
+|---------|------|---------|------|
+| Full (BF16) | ~19 GB | Python / transformers | [HuggingFace](https://huggingface.co/openbmb/MiniCPM-o-4_5) / [ModelScope](https://modelscope.cn/models/OpenBMB/MiniCPM-o-4_5) |
+| GGUF (quantized) | 4.8 - 16.4 GB | C++ / llama.cpp | [HuggingFace](https://huggingface.co/openbmb/MiniCPM-o-4_5-gguf) |
+
+**Primary target:** Full BF16 on RTX 4090. **Fallback:** GGUF if VRAM constrained. See [concept](concepts/concept.md#model-selection) for detailed comparison.
 
 ## Resources
 

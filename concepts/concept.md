@@ -6,6 +6,25 @@ Build a local, GPU-accelerated application that allows a user to **stream live v
 
 The system should feel like "chatting with someone who is watching the same video as you."
 
+### What this means concretely
+
+This is **not** a video upload tool. The user does not upload a video file and wait for the model to process it. Instead:
+
+1. A **continuous video stream** plays (from any source -- webcam, VLC, OBS, video file via stream)
+2. The model **continuously watches** the stream via a sliding window of recent frames
+3. The user gives an instruction like "tell me what's happening" and the model starts **narrating live** as the stream progresses
+4. The user can **steer the AI mid-stream** -- e.g., "now only tell me what the dog is doing when it's on screen" -- and the model adjusts its focus going forward
+5. The model does **not** need to remember what happened an hour ago. A sliding window of recent context (last N seconds/frames) is sufficient.
+
+Think of it as a **live commentator** that watches the same stream as you and responds to your directions in real-time.
+
+### What this is NOT
+
+- Not a video file upload + batch processing tool
+- Not limited to short clips
+- Not a single frame Q&A (though that's a building block)
+- Not dependent on processing the entire video before responding
+
 ---
 
 ## Core Idea
@@ -22,6 +41,22 @@ The system should feel like "chatting with someone who is watching the same vide
 ```
 
 The key insight: from the model's perspective, **all video input looks the same** -- it's just frames. Whether those frames come from a physical webcam, a virtual camera device (v4l2loopback), or a video file being streamed doesn't matter. This gives us flexibility in input sources without changing the core application.
+
+### Interaction Pattern
+
+This is a **continuous monitoring loop**, not request-response:
+
+```
+Video Stream --> [Frame Buffer / Sliding Window] --> Model (periodic inference) --> Streaming text output
+                                                          ^
+                                                          |
+                                              User steers via chat:
+                                              "tell me what's happening"
+                                              "focus on the dog only"
+                                              "what just changed?"
+```
+
+The model continuously receives recent frames and generates output. The user can steer what the model focuses on at any time. Previous instructions remain active until replaced -- like directing a commentator.
 
 ---
 
@@ -89,12 +124,15 @@ The key insight: from the model's perspective, **all video input looks the same*
 
 ### Input Sources (flexible, iterative)
 
+The streaming app (VLC, OBS, or similar) is a core part of the project -- researching the best option for providing a video stream to our system is part of Sprint 1.
+
 | Phase | Source | Method |
 |-------|--------|--------|
-| MVP | Local video file | v4l2loopback virtual camera or direct file feed |
-| MVP | Webcam | Direct browser/WebRTC camera access |
+| MVP | Webcam | Direct camera access or via streaming app |
+| MVP | Video file as stream | VLC, OBS, or similar app streaming to v4l2loopback or direct feed |
+| MVP | Streaming app research | Evaluate VLC, OBS, FFmpeg, etc. as stream providers |
 | Later | Phone camera | Stream over network (IP camera / WebRTC) |
-| Later | VLC / external stream | RTSP/RTMP to virtual camera device |
+| Later | External streams | RTSP/RTMP from other sources |
 
 ### User Interaction (iterative)
 
@@ -108,20 +146,46 @@ The key insight: from the model's perspective, **all video input looks the same*
 
 ## Model Selection
 
-**Target: MiniCPM-o 4.5** -- the latest omni-modal model supporting vision + audio + text.
+**Target: MiniCPM-o 4.5** -- the latest omni-modal model supporting vision + audio + text in a single 9B parameter model.
 
-| Variant | VRAM Required | Notes |
-|---------|---------------|-------|
-| Full (BF16) | ~19 GB | Fits on RTX 4090 (24 GB) |
-| GGUF (quantized) | ~10 GB | Lower VRAM, llama.cpp backend |
-| AWQ (quantized) | ~11 GB | Quantized weights, good perf |
+### Why this model
 
-**Primary target**: Full model on RTX 4090 (19 GB fits within 24 GB).
-**Fallback**: GGUF or AWQ quantized if VRAM becomes an issue during streaming.
+MiniCPM-o 4.5 is chosen because it has everything we need built into one model:
+- **Vision**: video understanding up to 10 FPS, any aspect ratio
+- **STT/ASR**: speech-to-text built in (Whisper-based, multilingual)
+- **TTS**: text-to-speech built in (with voice cloning)
+- **Full-duplex mode**: simultaneous video+audio input with text+speech output (`model.as_duplex()`)
+- Runs on consumer hardware (RTX 4090 with 24GB)
 
-Sources:
-- HuggingFace: `openbmb/MiniCPM-o-4_5-gguf`
-- ModelScope: `OpenBMB/MiniCPM-o-4_5`
+For Sprint 1 we use vision + text only. STT and TTS are already in the model and can be enabled later without switching models.
+
+### Model variants
+
+| Variant | Source | Inference backend | VRAM | Download |
+|---------|--------|-------------------|------|----------|
+| **Full (BF16)** | [HuggingFace](https://huggingface.co/openbmb/MiniCPM-o-4_5) | Python / transformers | ~19 GB | ~18.7 GB (4 safetensor files) |
+| **Full (BF16)** | [ModelScope](https://modelscope.cn/models/OpenBMB/MiniCPM-o-4_5) | Python / transformers | ~19 GB | Same model, Chinese mirror |
+| **GGUF (quantized)** | [HuggingFace](https://huggingface.co/openbmb/MiniCPM-o-4_5-gguf) | C++ / llama.cpp | 4.8 - 16.4 GB | Various quantization levels |
+
+### Key differences between variants
+
+| | Full (BF16) | GGUF |
+|---|---|---|
+| **Inference** | Python + transformers + CUDA | C++ / llama.cpp (must compile) |
+| **Quality** | Full precision, no loss | Quantized, slight quality loss depending on level |
+| **VRAM** | ~19 GB (vision-only: less) | Q8_0: 8.7 GB, Q6_K: 6.7 GB, Q4_K_M: 5.0 GB |
+| **Speed** | Model card claims 154 tokens/s (BF16), hardware unknown -- must benchmark on our 4090 | Model card claims 212 tokens/s (INT4), hardware unknown |
+| **Audio/TTS** | Fully supported | Text-only in llama.cpp (no audio/TTS) |
+| **Complexity** | pip install, done | Compile llama.cpp, different inference API |
+| **Our use** | **Primary (Sprint 1)** | Fallback if VRAM constrained |
+
+### Decision
+
+**Sprint 1: Full BF16 from HuggingFace** (`openbmb/MiniCPM-o-4_5`).
+- Works with Python/transformers, no compilation needed
+- Vision-only mode (`init_audio=False, init_tts=False`) saves VRAM for Sprint 1
+- When we add voice later, audio+TTS modules are already in the same model weights
+- GGUF remains as fallback if multi-frame inference causes VRAM issues
 
 ---
 
