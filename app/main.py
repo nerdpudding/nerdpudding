@@ -2,6 +2,7 @@ import asyncio
 import io
 import json
 import logging
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
@@ -11,7 +12,13 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app.config import FRAME_JPEG_QUALITY, SERVER_HOST, SERVER_PORT
+from app.config import (
+    FRAME_JPEG_QUALITY,
+    MJPEG_FPS,
+    SERVER_HOST,
+    SERVER_PORT,
+    STREAM_DELAY_INIT,
+)
 from app.frame_capture import FrameCapture
 from app.model_server import ModelServer
 from app.monitor_loop import MonitorLoop
@@ -166,6 +173,7 @@ async def stream_sse(request: Request):
 
 @app.get("/api/frame")
 async def get_frame(request: Request):
+    """Single frame snapshot (always real-time, no delay). For API consumers."""
     capture = request.app.state.capture
     frame = capture.latest_frame
     if frame is None:
@@ -173,6 +181,60 @@ async def get_frame(request: Request):
     buf = io.BytesIO()
     frame.save(buf, format="JPEG", quality=FRAME_JPEG_QUALITY)
     return Response(content=buf.getvalue(), media_type="image/jpeg")
+
+
+@app.get("/api/mjpeg")
+async def mjpeg_stream(request: Request):
+    """MJPEG video stream with adaptive delay for commentary sync.
+
+    Reads from the display buffer in FrameCapture (native frame rate),
+    NOT from the inference SlidingWindow (2 FPS). This gives smooth
+    playback at the source's original frame rate.
+
+    When STREAM_DELAY_INIT > 0, frames are served with an adaptive delay
+    that tracks inference latency via EMA. When STREAM_DELAY_INIT == 0,
+    frames are served in real-time (no sync).
+    """
+    capture = request.app.state.capture
+    monitor = request.app.state.monitor
+    # Match source FPS for smooth playback, fall back to MJPEG_FPS
+    display_fps = capture.source_fps if capture.source_fps > 0 else MJPEG_FPS
+    interval = 1.0 / display_fps
+
+    async def generate():
+        next_push = time.monotonic()
+        while True:
+            if await request.is_disconnected():
+                break
+
+            # Get JPEG from display buffer: delayed or real-time
+            if STREAM_DELAY_INIT > 0:
+                target_time = time.time() - monitor.target_delay
+                jpeg = capture.get_display_jpeg(target_time)
+            else:
+                jpeg = capture.get_display_jpeg()
+
+            if jpeg is not None:
+                yield (
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n"
+                    b"Content-Length: " + str(len(jpeg)).encode() + b"\r\n"
+                    b"\r\n" + jpeg + b"\r\n"
+                )
+
+            # Consistent timing at source frame rate
+            next_push += interval
+            sleep_for = next_push - time.monotonic()
+            if sleep_for > 0:
+                await asyncio.sleep(sleep_for)
+            else:
+                next_push = time.monotonic()
+
+    return StreamingResponse(
+        generate(),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # --- Entrypoint ---

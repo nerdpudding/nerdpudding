@@ -12,6 +12,8 @@ from app.config import (
     FRAME_STRIDE,
     FRAMES_PER_INFERENCE,
     INFERENCE_INTERVAL,
+    STREAM_DELAY_EMA_ALPHA,
+    STREAM_DELAY_INIT,
 )
 from app.model_server import ModelServer
 from app.sliding_window import SlidingWindow
@@ -45,6 +47,8 @@ class MonitorLoop:
         self._last_response: str = ""
         self._last_instruction: Optional[str] = None
         self._last_inference_frame: Optional[Image.Image] = None
+        # Adaptive sync: EMA-smoothed delay for MJPEG stream
+        self._target_delay: float = STREAM_DELAY_INIT
 
     @property
     def mode(self) -> str:
@@ -65,6 +69,11 @@ class MonitorLoop:
     @property
     def cycle_count(self) -> int:
         return self._cycle_count
+
+    @property
+    def target_delay(self) -> float:
+        """Current adaptive delay for MJPEG sync (seconds)."""
+        return self._target_delay
 
     def set_instruction(self, instruction: Optional[str]) -> None:
         """Set or clear the current instruction.
@@ -234,6 +243,21 @@ class MonitorLoop:
             "latency_sec": round(t_end - frame_timestamps[0], 2),
             "skipped": full_response.strip() == "...",
         }
+        # Update adaptive delay via EMA on observed latency.
+        # Skip "..." responses — they have artificially low latency that
+        # would pull the EMA down and desync real commentary cycles.
+        if STREAM_DELAY_INIT > 0 and not meta["skipped"]:
+            observed = t_end - frame_timestamps[-1]
+            alpha = STREAM_DELAY_EMA_ALPHA
+            old_delay = self._target_delay
+            self._target_delay = (1 - alpha) * old_delay + alpha * observed
+            logger.info(
+                f"Sync delay: observed={observed:.2f}s, "
+                f"target={old_delay:.2f}s -> {self._target_delay:.2f}s"
+            )
+        if STREAM_DELAY_INIT > 0:
+            meta["target_delay"] = round(self._target_delay, 2)
+
         loop.call_soon_threadsafe(self._publish, meta)
         return full_response
 

@@ -101,24 +101,75 @@ After (FRAMES_PER_INFERENCE=4, CAPTURE_FPS=2, FRAME_STRIDE=2, INFERENCE_INTERVAL
 
 ---
 
-## Step 2: MJPEG Streaming (Quick UI Win)
+## Step 2: MJPEG Streaming with Adaptive Sync
 
-**Goal**: Replace 500ms frame polling with smooth MJPEG stream.
+**Goal**: Replace 500ms frame polling with smooth MJPEG stream, synchronized with AI commentary via adaptive delay.
 
-**Why second**: Small change, big visible improvement. No dependencies on other steps.
+**Why second**: Big visible UX improvement. The sync mechanism is critical for a usable product — without it, the user sees live video but hears commentary about what happened 4-5 seconds ago, creating a disconnect.
 
-**Files**:
-- `app/main.py` -- Add `GET /api/mjpeg` endpoint using `multipart/x-mixed-replace`
+### The sync problem
+
+The inference pipeline introduces variable latency (~3.5-6s) between frame capture and commentary delivery. Without sync, the user sees real-time video but receives commentary about frames from seconds ago. Over time this doesn't drift (SlidingWindow always reads newest frames — see Step 1b), but the constant offset creates a poor UX: you see a goal happen, then 5 seconds later hear "and there's a goal!" This is the same problem solved by professional sports commentary systems.
+
+**Network considerations**: The video input may come from a network source (RTSP, IP cam over WiFi/VPN) and the UI runs in a browser on a client device (also over network). However, all sync processing happens server-side. Network latency on input/output adds a roughly constant offset that doesn't affect the sync algorithm — only the variable inference time needs adaptive compensation.
+
+### Research & references
+
+Professional solutions for this problem:
+- [WeSpeakSports case study](https://ireplay.tv/blog/ultra-low-latency-webrtc-live-sports-commentary-wespeaksports-antmedia-mediasoup-altcasting/) — dual WebRTC architecture for syncing live sports commentary with video. Documents the "Too Fast" problem (commentary arrives before video).
+- [Adaptive Jitter Buffer implementation](https://github.com/yingwang/adaptive-jitter-buffer) — playout speed based on buffer fullness. Slow down when buffer low, speed up when full. Limited to ~3.5x rate change for smooth transitions.
+- [Adaptive Playout Buffer Algorithm (Fujimoto et al.)](https://link.springer.com/article/10.1023/B:TELS.0000014784.20034.74) — academic foundation: EMA on observed latency for adaptive playout delay.
+- [Adaptive Playout for Low Latency Video Streaming (Kalman et al., Stanford)](https://web.stanford.edu/~bgirod/pdfs/KalmanCSVT2004.pdf) — adaptive media playout reduces receiver buffer delay while preserving resilience against underflow.
+- [LiveKit Python SDK AVSynchronizer](https://docs.livekit.io/reference/python/livekit/rtc/index.html) — built-in A/V sync with configurable delay tolerance. Relevant for TTS audio sync in Step 6.
+- [Axis: Latency in Live Network Video Surveillance](https://www.axis.com/dam/public/9d/e4/5d/latency-in-live-network-video-surveillance-en-US-190945.pdf) — MJPEG has lowest decoding/display latency since data can be drawn as it arrives (no timecodes needed).
+
+### Proposed solution: adaptive delayed MJPEG
+
+Server-side adaptive delay using Exponential Moving Average (EMA) on observed inference latency:
+
+```
+On each cycle_end event:
+    observed_delay = inference_end - newest_frame_at
+    target_delay = (1 - alpha) * target_delay + alpha * observed_delay
+
+MJPEG endpoint serves frame at: now - target_delay
+```
+
+With `alpha = 0.2`, the delay adapts smoothly:
+```
+Cycle 1: inference 4.2s → target = 0.8 * 5.0 + 0.2 * 4.2 = 4.84s
+Cycle 2: inference 3.8s → target = 0.8 * 4.84 + 0.2 * 3.8 = 4.63s
+Cycle 3: inference 5.1s → target = 0.8 * 4.63 + 0.2 * 5.1 = 4.72s
+...stabilizes around actual average latency
+```
+
+No visible jumps. At 2 FPS capture rate, the delay adjustment shifts by at most one frame (0.5s) between updates — imperceptible to the viewer. When TTS adds ~1s latency (Step 3-4), the EMA automatically adapts upward.
+
+### Files
+
+- `app/main.py` -- Add `GET /api/mjpeg` endpoint using `StreamingResponse` with `multipart/x-mixed-replace`. Reads delayed frames from SlidingWindow based on adaptive target_delay.
+- `app/sliding_window.py` -- Add `get_frame_near(target_timestamp)` method: returns the frame closest to a given timestamp from the buffer.
+- `app/monitor_loop.py` -- Expose `target_delay` property, updated via EMA on each `cycle_end`. The MJPEG endpoint reads this value.
 - `app/static/index.html` -- Replace `setInterval` polling with `<img src="/api/mjpeg">`
-- Keep `/api/frame` for API consumers (robot car)
+- `app/config.py` -- Add `STREAM_DELAY_INIT` (initial delay before first cycle_end, default 5.0s), `STREAM_DELAY_EMA_ALPHA` (smoothing factor, default 0.2), `MJPEG_FPS` (display frame rate, default 10), increase `WINDOW_SIZE` from 16 to 32 (16s buffer at 2 FPS, enough headroom for delay + margin)
+- Keep `/api/frame` for API consumers (robot car) — always real-time, no delay
 
-**Key pattern**: `StreamingResponse` with `multipart/x-mixed-replace; boundary=frame`. Server yields JPEG frames at ~10 FPS visual update rate. Each frame boundary is `--frame\r\nContent-Type: image/jpeg\r\n\r\n<jpeg bytes>\r\n`.
+### Key design decisions
 
-**Verification**:
+- **Server-side sync**: All delay logic runs on the server. The UI just shows `<img src="/api/mjpeg">`. No client-side JavaScript needed for sync.
+- **EMA over fixed delay**: Fixed delay goes out of sync when inference speed changes (prompt change, TTS enabled, model swap). EMA adapts automatically.
+- **Separate display vs inference buffers**: SlidingWindow serves both, but MJPEG reads older frames (delayed) while inference reads newest. WINDOW_SIZE=32 ensures both fit.
+- **`/api/frame` stays real-time**: API consumers (robot car) want the latest frame, not a delayed one.
+
+### Verification
+
 - Start server with video source
-- Browser shows smooth video instead of slideshow
-- SSE commentary still works alongside
-- `/api/frame` single-shot still works
+- Browser shows smooth, delayed video via `<img src="/api/mjpeg">`
+- Set instruction → commentary arrives roughly in sync with displayed video
+- Change instruction (different inference speed) → delay adapts within a few cycles
+- SSE commentary still works alongside MJPEG
+- `/api/frame` single-shot still returns real-time frame (no delay)
+- Check logs: target_delay value should stabilize after 5-10 cycles
 
 ---
 
@@ -346,13 +397,19 @@ Step 8: UI Updates (depends on Steps 2, 6) ────────────�
 Test & verify after each step ─────────────────────────────────┘
 ```
 
-Steps 1 and 2 are independent quick wins. Steps 3-4 are the core TTS work. Step 5 can run in parallel. Steps 6-8 build on everything prior.
+Step 1 is a quick win. Step 2 adds MJPEG + adaptive sync (medium complexity, important for UX). Steps 3-4 are the core TTS work. Step 5 can run in parallel. Steps 6-8 build on everything prior.
 
 ## Config Additions Summary
 
 All new entries in `app/config.py`, env var overridable:
 
 ```python
+# MJPEG Sync
+WINDOW_SIZE = int(os.getenv("WINDOW_SIZE", "32"))  # increased from 16 for delay headroom
+STREAM_DELAY_INIT = float(os.getenv("STREAM_DELAY_INIT", "5.0"))  # initial delay before first cycle_end
+STREAM_DELAY_EMA_ALPHA = float(os.getenv("STREAM_DELAY_EMA_ALPHA", "0.2"))  # EMA smoothing factor
+MJPEG_FPS = int(os.getenv("MJPEG_FPS", "10"))  # display frame rate for MJPEG stream
+
 # TTS
 ENABLE_TTS = os.getenv("ENABLE_TTS", "false").lower() == "true"
 REF_AUDIO_PATH = os.getenv("REF_AUDIO_PATH", "models/MiniCPM-o-4_5/assets/system_ref_audio.wav")
@@ -393,6 +450,8 @@ MAX_RECONNECT_DELAY = float(os.getenv("MAX_RECONNECT_DELAY", "30.0"))
 | LiveKit complexity escalates | Steps 1-5 deliver value without LiveKit. It's additive, not blocking. |
 | Reference audio quality affects TTS | Model ships with `system_ref_audio.wav`. Can try alternatives from assets/. |
 | autoawq custom fork breaks | Pin version. BF16 fallback always available. |
+| Adaptive sync delay doesn't converge | EMA with alpha=0.2 is conservative. Fallback: fixed STREAM_DELAY_INIT with no adaptation. Tune alpha via env var. |
+| WINDOW_SIZE=32 too small for large delays | At 2 FPS, 32 frames = 16s buffer. Max practical delay ~10s. If TTS pushes beyond, increase WINDOW_SIZE. |
 
 ## Graceful Degradation
 
@@ -400,4 +459,5 @@ Everything is opt-in:
 - `ENABLE_TTS=false` → text-only, same as Sprint 1
 - `LIVEKIT_ENABLED=false` → OpenCV + MJPEG + SSE, no WebRTC needed
 - `MODEL_PATH=models/MiniCPM-o-4_5` → BF16 fallback
+- `STREAM_DELAY_INIT=0` → MJPEG without delay (real-time, no sync)
 - Any combination works. Full stack = AWQ + TTS + LiveKit + Docker.

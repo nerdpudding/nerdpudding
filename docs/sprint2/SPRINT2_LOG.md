@@ -102,3 +102,75 @@ Tested with Shrek video file, AWQ model, commentator prompt active:
 All settings remain env-var overridable for tuning per use case.
 
 ---
+
+## Step 2: MJPEG Streaming with Adaptive Sync
+
+### Problem
+
+The Sprint 1 UI used frame polling (`setInterval` every 500ms fetching `/api/frame`). This produced a choppy slideshow effect. Additionally, the live video was always real-time while commentary referred to frames from several seconds ago, creating a disconnect.
+
+### Solution: native-rate MJPEG + adaptive delay
+
+**Two key changes:**
+
+1. **Display/inference separation**: `FrameCapture` now reads every frame at native rate (~24 FPS for video files) and stores JPEG-encoded frames in a display buffer. It only pushes to `SlidingWindow` at `CAPTURE_FPS` (2 FPS) for inference. Previously, capture only ran at 2 FPS and the MJPEG could only show 2 frames/second.
+
+2. **Adaptive sync delay**: The MJPEG endpoint serves frames from `now - target_delay` instead of the latest frame. `target_delay` is an EMA (Exponential Moving Average) that tracks observed inference latency. Skip cycles ("...") are filtered from the EMA to prevent drift.
+
+### Research
+
+Professional solutions for video-commentary sync were evaluated:
+- [WeSpeakSports case study](https://ireplay.tv/blog/ultra-low-latency-webrtc-live-sports-commentary-wespeaksports-antmedia-mediasoup-altcasting/) — dual WebRTC for syncing live sports commentary
+- [Adaptive Jitter Buffer](https://github.com/yingwang/adaptive-jitter-buffer) — playout speed based on buffer fullness
+- [Fujimoto et al.](https://link.springer.com/article/10.1023/B:TELS.0000014784.20034.74) — EMA-based adaptive playout delay
+- [Kalman et al. (Stanford)](https://web.stanford.edu/~bgirod/pdfs/KalmanCSVT2004.pdf) — adaptive media playout for low latency
+
+Our approach (server-side EMA on observed latency) matches the academic consensus while being much simpler than a full jitter buffer — we have no network jitter, only variable inference time.
+
+### Code changes
+
+- `app/frame_capture.py` -- Major refactor: reads at native rate, dual output paths (display buffer at native FPS, inference callback at CAPTURE_FPS). New `get_display_jpeg(target_time)` method. JPEG-encodes every frame into a timestamped ring buffer (~30-45 MB for 15s at 24 FPS).
+- `app/main.py` -- New `GET /api/mjpeg` endpoint using `StreamingResponse` with `multipart/x-mixed-replace`. Reads from display buffer with adaptive delay. Matches source FPS for smooth playback.
+- `app/monitor_loop.py` -- Added `target_delay` property (EMA-updated on each non-skip `cycle_end`). Imported `STREAM_DELAY_INIT` and `STREAM_DELAY_EMA_ALPHA`.
+- `app/sliding_window.py` -- Added `get_frame_near(target_timestamp)` method.
+- `app/config.py` -- Added `STREAM_DELAY_INIT` (5.0s), `STREAM_DELAY_EMA_ALPHA` (0.2), `MJPEG_FPS` (10, fallback for live sources). Increased `WINDOW_SIZE` from 16 to 32.
+- `app/static/index.html` -- Replaced `setInterval` frame polling with `<img src="/api/mjpeg">`. Shows `target_delay` in cycle metadata.
+
+### Bugs found and fixed
+
+**Bug 1 — Choppy MJPEG at 2 FPS:**
+Initial implementation read from the SlidingWindow (2 FPS inference buffer). Video was as choppy as polling. Fixed by separating display from inference: frame_capture now reads at native rate (~24 FPS) and stores JPEG frames in a dedicated display buffer.
+
+**Bug 2 — Skip cycles pulling EMA down:**
+"..." responses (scene unchanged) have very short inference time (~0.3s), pulling the EMA delay too low. Fixed by filtering skipped cycles from the EMA update.
+
+### Test results
+
+| Metric | Before (polling) | After (MJPEG + sync) |
+|--------|------------------|---------------------|
+| Video frame rate | ~2 FPS (polling) | ~24 FPS (native) |
+| Video smoothness | Choppy slideshow | Smooth playback |
+| Video-commentary sync | No sync (live video, delayed text) | Adaptive sync via EMA |
+| /api/frame (API) | Real-time | Still real-time (unchanged) |
+| Display buffer memory | N/A | ~30-45 MB (15s at 24 FPS) |
+
+EMA convergence example (from test run):
+```
+Cycle 1: inference=3.44s, target_delay=4.79s (from 5.0 init)
+Cycle 2: inference=2.19s, target_delay=4.36s
+Cycle 4: inference=2.09s, target_delay=3.99s  (skip cycles filtered)
+Cycle 6: inference=1.86s, target_delay=3.64s
+Cycle 7: inference=1.64s, target_delay=3.29s
+...stabilizes around observed average
+```
+
+### Config (all env-var overridable)
+
+| Setting | Default | Purpose |
+|---------|---------|---------|
+| `STREAM_DELAY_INIT` | 5.0 | Initial delay before EMA calibrates. 0 = no sync |
+| `STREAM_DELAY_EMA_ALPHA` | 0.2 | EMA smoothing. Higher = faster adaptation |
+| `MJPEG_FPS` | 10 | Fallback display FPS for live sources without known FPS |
+| `WINDOW_SIZE` | 32 | Increased from 16 for delay headroom |
+
+---

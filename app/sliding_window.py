@@ -73,6 +73,30 @@ class SlidingWindow:
             items = items[-n:]
         return items
 
+    def get_frame_near(self, target_time: float) -> Optional[FrameMeta]:
+        """Return the frame closest to target_time, or None if buffer is empty.
+
+        Uses binary-style search on the timestamp-sorted buffer. Since frames
+        are appended in chronological order, the deque is always sorted.
+        """
+        with self._lock:
+            if not self._buffer:
+                return None
+            # Edge cases: target before/after all frames
+            if target_time <= self._buffer[0].timestamp:
+                return self._buffer[0]
+            if target_time >= self._buffer[-1].timestamp:
+                return self._buffer[-1]
+            # Linear scan (buffer is small, max ~32 items)
+            best = self._buffer[0]
+            best_diff = abs(best.timestamp - target_time)
+            for meta in self._buffer:
+                diff = abs(meta.timestamp - target_time)
+                if diff < best_diff:
+                    best = meta
+                    best_diff = diff
+            return best
+
     @property
     def count(self) -> int:
         with self._lock:

@@ -57,8 +57,9 @@ CAPTURE_FPS = float(os.getenv("CAPTURE_FPS", "2.0"))
 # ---------------------------------------------------------------------------
 # Sliding window
 # ---------------------------------------------------------------------------
-# Max frames kept in the ring buffer. At 1 FPS, 16 = 16 seconds of history.
-WINDOW_SIZE = int(os.getenv("WINDOW_SIZE", "16"))
+# Max frames kept in the ring buffer. At 2 FPS, 32 = 16 seconds of history.
+# Must be large enough to hold STREAM_DELAY_INIT worth of frames plus margin.
+WINDOW_SIZE = int(os.getenv("WINDOW_SIZE", "32"))
 
 # How many recent frames to send per inference cycle.
 # More frames = more temporal context but slower inference and more VRAM.
@@ -107,3 +108,24 @@ SERVER_PORT = int(os.getenv("SERVER_PORT", "8199"))
 
 # JPEG quality for the /api/frame endpoint (1-100). Lower = smaller, faster.
 FRAME_JPEG_QUALITY = int(os.getenv("FRAME_JPEG_QUALITY", "80"))
+
+# ---------------------------------------------------------------------------
+# MJPEG streaming
+# ---------------------------------------------------------------------------
+# Display frame rate for the /api/mjpeg endpoint. Controls how often a new
+# JPEG is pushed to the browser. At 2 FPS capture, frames repeat between
+# captures but the stream stays responsive.
+MJPEG_FPS = int(os.getenv("MJPEG_FPS", "10"))
+
+# ---------------------------------------------------------------------------
+# Adaptive sync (video-commentary synchronization)
+# ---------------------------------------------------------------------------
+# Initial delay (seconds) before the first cycle_end calibrates the EMA.
+# The MJPEG stream shows frames from this many seconds ago until inference
+# timing data is available. Set to 0 to disable delay (real-time, no sync).
+STREAM_DELAY_INIT = float(os.getenv("STREAM_DELAY_INIT", "5.0"))
+
+# EMA smoothing factor for adaptive delay. Higher = faster adaptation but
+# more jittery. Lower = smoother but slower to respond to changes.
+# 0.2 is a good default: adapts within ~5 cycles.
+STREAM_DELAY_EMA_ALPHA = float(os.getenv("STREAM_DELAY_EMA_ALPHA", "0.2"))

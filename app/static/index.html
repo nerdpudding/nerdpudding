@@ -78,7 +78,6 @@
 
 <script>
 const API = '';
-const FRAME_POLL_MS = 500;
 
 const img = document.getElementById('video-frame');
 const noVideo = document.getElementById('no-video');
@@ -90,7 +89,6 @@ const btnStart = document.getElementById('btn-start');
 const btnStop = document.getElementById('btn-stop');
 const btnSend = document.getElementById('btn-send');
 
-let frameTimer = null;
 let eventSource = null;
 let cycleCount = 0;
 let currentBlock = null;
@@ -106,24 +104,16 @@ async function fetchStatus() {
   } catch (e) { /* ignore */ }
 }
 
-// --- Frame polling ---
+// --- MJPEG stream ---
 
-function startFramePolling() {
-  stopFramePolling();
-  frameTimer = setInterval(() => {
-    const url = API + '/api/frame?' + Date.now();
-    const tmp = new Image();
-    tmp.onload = () => {
-      img.src = tmp.src;
-      img.style.display = 'block';
-      noVideo.style.display = 'none';
-    };
-    tmp.src = url;
-  }, FRAME_POLL_MS);
+function startMJPEG() {
+  img.src = API + '/api/mjpeg';
+  img.style.display = 'block';
+  noVideo.style.display = 'none';
 }
 
-function stopFramePolling() {
-  if (frameTimer) { clearInterval(frameTimer); frameTimer = null; }
+function stopMJPEG() {
+  img.src = '';
   img.style.display = 'none';
   noVideo.style.display = 'flex';
 }
@@ -148,11 +138,15 @@ function connectSSE() {
         const ts = (t) => new Date(t * 1000).toLocaleTimeString();
         const metaEl = document.createElement('div');
         metaEl.className = 'cycle-meta';
-        metaEl.textContent =
+        let metaText =
           'Frames #' + meta.frame_ids[0] + '-#' + meta.frame_ids[meta.frame_ids.length - 1] +
           ' | Captured ' + ts(meta.oldest_frame_at) + '-' + ts(meta.newest_frame_at) +
           ' | Inference: ' + meta.inference_sec + 's' +
           ' | Latency: ' + meta.latency_sec + 's';
+        if (meta.target_delay != null) {
+          metaText += ' | Sync delay: ' + meta.target_delay + 's';
+        }
+        metaEl.textContent = metaText;
         currentBlock.appendChild(metaEl);
         commentary.scrollTop = commentary.scrollHeight;
       }
@@ -197,7 +191,7 @@ btnStart.addEventListener('click', async () => {
     btnStop.disabled = false;
     instrInput.disabled = false;
     btnSend.disabled = false;
-    startFramePolling();
+    startMJPEG();
     connectSSE();
     fetchStatus();
   } catch (e) { alert('Failed to start: ' + e.message); }
@@ -210,7 +204,7 @@ btnStop.addEventListener('click', async () => {
     btnStop.disabled = true;
     instrInput.disabled = true;
     btnSend.disabled = true;
-    stopFramePolling();
+    stopMJPEG();
     disconnectSSE();
     fetchStatus();
   } catch (e) { alert('Failed to stop: ' + e.message); }
