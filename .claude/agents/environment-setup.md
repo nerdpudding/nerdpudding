@@ -50,11 +50,11 @@ VRAM is the primary constraint. The full MiniCPM-o 4.5 model needs ~19 GB, leavi
 
 ### 3. Docker Configuration
 
-- Create Dockerfiles and docker-compose files
 - Configure NVIDIA Container Toolkit for GPU access
 - Set up volume mounts for models, configs, and data
 - Configure networking between containers
 - Troubleshoot container startup failures and resource issues
+- Note: Dockerfiles and docker-compose files are written by the builder agent; this agent handles the runtime environment inside containers
 
 ### 4. System Dependencies
 

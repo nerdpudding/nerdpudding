@@ -151,7 +151,7 @@ See the [Project hierarchy](AI_INSTRUCTIONS.md#project-hierarchy) in AI_INSTRUCT
 
 ## Current Status
 
-**Sprint 1 complete.** Working MVP: continuous video monitoring with real-time AI commentary, steerable mid-stream. See [Sprint 1 Review](docs/sprint1/SPRINT1_REVIEW.md) for detailed findings.
+**Sprint 1 complete. Sprint 2 in progress.** Working MVP from Sprint 1: continuous video monitoring with real-time AI commentary, steerable mid-stream. Sprint 2 adds AWQ INT4 model, TTS audio output, LiveKit WebRTC, and Docker. See [Sprint 2 Plan](claude_plans/PLAN_sprint2.md) for details.
 
 | Metric | Value |
 |--------|-------|

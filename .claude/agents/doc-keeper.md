@@ -16,7 +16,7 @@ Before doing anything else, read the following files in this exact order:
 2. `README.md` — user-facing overview and structure
 3. `roadmap.md` — current status and plans
 4. `concepts/concept.md` — detailed concept, architecture, constraints
-5. Current task tracker if one exists (e.g. `todo_feb_17.md`)
+5. Current task tracker if one exists (check root for `todo_*.md`)
 
 If any of these files do not exist, note their absence but continue with what's available. Then scan additional files based on the specific audit requested.
 

@@ -16,35 +16,37 @@
 - [x] Centralize configuration (config.py, env var overridable)
 - [x] Document findings, limitations, and performance observations
 
-## Sprint 2 — Stabilize and Improve
+## Sprint 2 — Input Agnosticism, TTS, WebRTC, Docker
 
-- [ ] Dockerize the setup for reproducibility
-- [ ] Real video playback in UI (WebRTC or HLS, not frame polling)
-- [ ] Nicer web frontend (React or Vue, proper controls and styling)
-- [ ] VLC/RTSP stream input (v4l2loopback setup)
-- [ ] Lower latency experiments (fewer frames, higher FPS, adaptive intervals)
-- [ ] Persistent configuration (.env file support or config UI)
-- [ ] Auto-reconnect on capture failure
-- [ ] Evaluate TTS output (model's built-in text-to-speech)
-- [ ] Evaluate STT input (voice instructions)
+- [ ] AWQ INT4 model support (11 GB VRAM, 38% faster, BF16 fallback)
+- [ ] MJPEG streaming endpoint (smooth video in UI, replaces frame polling)
+- [ ] TTS integration (model's built-in streaming TTS, 24kHz audio output)
+- [ ] Audio delivery pipeline (AudioManager, resampling, /api/audio-stream)
+- [ ] Docker setup (GPU passthrough, model as bind mount, docker-compose)
+- [ ] LiveKit WebRTC (browser webcam input, TTS audio to browser)
+- [ ] Input robustness (RTSP/IP cam/phone/VLC testing, auto-reconnect)
+- [ ] UI updates (source mode selector, MJPEG video, TTS controls, status indicators)
 
 ## Sprint 3 — Extended Capabilities
 
-- [ ] Voice input and speech output integration
-- [ ] WebSocket transport for bidirectional audio streaming
+- [ ] React or Vue frontend (proper controls, styling, scalable UI)
+- [ ] STT input (voice instructions via model's built-in speech recognition)
+- [ ] Multi-GPU / GGUF via llama.cpp (offload to both GPUs)
 - [ ] Phone camera / remote video source support
-- [ ] Explore multi-model pipeline (vision output feeding other systems)
+- [ ] Multi-model pipeline (vision output feeding other LLMs or alert systems)
 - [ ] Monitoring and alerting use case prototype
 - [ ] Recording / logging (save commentary + timestamps)
+- [ ] Persistent configuration (.env file support or config UI)
 
 ## Status
 
 | Sprint | Status |
 |--------|--------|
 | Sprint 1 | Complete |
-| Sprint 2 | Planned |
+| Sprint 2 | In progress |
 | Sprint 3 | Planned |
 
-## Sprint 1 Results
+## Sprint Results
 
-See [Sprint 1 Review](docs/sprint1/SPRINT1_REVIEW.md) for detailed findings, performance data, and Sprint 2 recommendations.
+- [Sprint 1 Review](docs/sprint1/SPRINT1_REVIEW.md) -- findings, performance data, Sprint 2 recommendations
+- [Sprint 2 Plan](claude_plans/PLAN_sprint2.md) -- detailed 8-step implementation plan

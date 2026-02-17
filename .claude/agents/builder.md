@@ -80,18 +80,13 @@ Then review the current project structure to understand what already exists.
 
 ## File Organization
 
-When creating application files, place them in a logical structure separate from the cloned repos:
+When creating application files, follow the project structure defined in `AI_INSTRUCTIONS.md` hierarchy. Key locations:
 
-```
-app/                    # Our application code (suggested, adapt as needed)
-├── docker-compose.yml
-├── model-server/       # Adapted model server code
-├── web-frontend/       # Adapted frontend code
-├── scripts/            # Build and startup scripts
-└── config/             # Configuration files
-```
-
-The exact structure may evolve. Follow what's defined in `AI_INSTRUCTIONS.md` hierarchy.
+- `app/` -- application code (model_server, monitor_loop, frame_capture, etc.)
+- `scripts/` -- standalone test and utility scripts
+- `config/` -- configuration files (e.g. livekit.yaml)
+- `Dockerfile` and `docker-compose.yml` at project root
+- `models/` -- model files (bind-mounted, not in Docker image)
 
 ## Inviolable Rules
 
