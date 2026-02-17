@@ -163,8 +163,9 @@ For Sprint 1 we use vision + text only. STT and TTS are already in the model and
 
 | Variant | Source | Inference backend | VRAM | Download |
 |---------|--------|-------------------|------|----------|
-| **Full (BF16)** | [HuggingFace](https://huggingface.co/openbmb/MiniCPM-o-4_5) | Python / transformers | ~19 GB | ~18.7 GB (4 safetensor files) |
-| **Full (BF16)** | [ModelScope](https://modelscope.cn/models/OpenBMB/MiniCPM-o-4_5) | Python / transformers | ~19 GB | Same model, Chinese mirror |
+| **AWQ INT4** (default) | [HuggingFace](https://huggingface.co/openbmb/MiniCPM-o-4_5-awq) | Python / transformers + autoawq | ~8.6 GB | ~8 GB (2 safetensor files) |
+| **Full (BF16)** | [HuggingFace](https://huggingface.co/openbmb/MiniCPM-o-4_5) | Python / transformers | ~18.5 GB | ~18.7 GB (4 safetensor files) |
+| **Full (BF16)** | [ModelScope](https://modelscope.cn/models/OpenBMB/MiniCPM-o-4_5) | Python / transformers | ~18.5 GB | Same model, Chinese mirror |
 | **GGUF (quantized)** | [HuggingFace](https://huggingface.co/openbmb/MiniCPM-o-4_5-gguf) | C++ / llama.cpp | 4.8 - 16.4 GB | Various quantization levels |
 
 ### Key differences between variants
@@ -177,15 +178,19 @@ For Sprint 1 we use vision + text only. STT and TTS are already in the model and
 | **Speed** | Model card claims 154 tokens/s (BF16), hardware unknown -- must benchmark on our 4090 | Model card claims 212 tokens/s (INT4), hardware unknown |
 | **Audio/TTS** | Fully supported | Text-only in llama.cpp (no audio/TTS) |
 | **Complexity** | pip install, done | Compile llama.cpp, different inference API |
-| **Our use** | **Primary (Sprint 1)** | Fallback if VRAM constrained |
+| **Our use** | Sprint 1 primary; Sprint 2 fallback | Fallback if VRAM constrained |
 
 ### Decision
 
-**Sprint 1: Full BF16 from HuggingFace** (`openbmb/MiniCPM-o-4_5`).
-- Works with Python/transformers, no compilation needed
-- Vision-only mode (`init_audio=False, init_tts=False`) saves VRAM for Sprint 1
-- When we add voice later, audio+TTS modules are already in the same model weights
-- GGUF remains as fallback if multi-frame inference causes VRAM issues
+**Sprint 2+: AWQ INT4 from HuggingFace** (`openbmb/MiniCPM-o-4_5-awq`).
+- 54% less VRAM (~8.6 GB vs ~18.5 GB), comparable output quality
+- Same `AutoModel.from_pretrained()` loading — auto-detected via `quantization_config`
+- Needs `autoawq` from custom fork (see `app/requirements.txt`)
+- Leaves ~15 GB headroom on RTX 4090 for TTS, inference context, etc.
+- BF16 remains available via `MODEL_PATH=models/MiniCPM-o-4_5` env var
+- GGUF deferred to Sprint 3 (no TTS support in llama.cpp)
+
+Previously (Sprint 1): Full BF16 was the default, which worked but left only ~5 GB headroom.
 
 ---
 
@@ -199,7 +204,7 @@ For Sprint 1 we use vision + text only. STT and TTS are already in the model and
 | **RAM** | 64 GB DDR4 | Model loading, frame buffering |
 | **OS** | Ubuntu Desktop | Development and runtime |
 
-**VRAM constraints**: The 4090 with 24 GB is the main workhorse. The full MiniCPM-o 4.5 model at ~19 GB leaves ~5 GB headroom for inference context. This is tight but workable for streaming. If VRAM becomes a bottleneck (long context, high-res frames), we fall back to quantized variants.
+**VRAM constraints**: The 4090 with 24 GB is the main workhorse. With the default AWQ INT4 model at ~8.6 GB, there is ~15 GB headroom for TTS (~2 GB), inference context, and future features. The BF16 model at ~18.5 GB leaves only ~5 GB headroom — still workable but tight.
 
 **Mixed GPU note**: Using both GPUs adds complexity (different architectures, offloading logic). This is a last resort, not the default plan.
 

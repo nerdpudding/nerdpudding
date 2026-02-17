@@ -54,3 +54,4 @@ Steps 1-2 deliver a successful proof of concept: smooth native-rate video with r
 
 - [Sprint 1 Review](docs/sprint1/SPRINT1_REVIEW.md) -- findings, performance data, Sprint 2 recommendations
 - [Sprint 2 Plan](claude_plans/PLAN_sprint2.md) -- detailed 8-step implementation plan
+- [Sprint 2 Log](docs/sprint2/SPRINT2_LOG.md) -- progress, bugs found, performance measurements

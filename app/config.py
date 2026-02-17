@@ -20,8 +20,8 @@ CUDA_VISIBLE_DEVICES = os.getenv("CUDA_VISIBLE_DEVICES", "0")
 # ---------------------------------------------------------------------------
 # Model
 # ---------------------------------------------------------------------------
-# Path to the model directory. Default: AWQ INT4 (~7 GB VRAM).
-# For full precision, use MODEL_PATH=models/MiniCPM-o-4_5 (BF16, ~16 GB VRAM).
+# Path to the model directory. Default: AWQ INT4 (~8.6 GB VRAM via nvidia-smi).
+# For full precision, use MODEL_PATH=models/MiniCPM-o-4_5 (BF16, ~18.5 GB VRAM).
 MODEL_PATH = os.getenv("MODEL_PATH", "models/MiniCPM-o-4_5-awq")
 
 # Token IDs to suppress during generation. 151667 = <think> token.
