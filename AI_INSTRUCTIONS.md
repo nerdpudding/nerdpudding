@@ -45,7 +45,8 @@ For non-trivial changes, follow this order:
 │   ├── frame_capture.py              # Background thread capture (OpenCV)
 │   ├── sliding_window.py             # Thread-safe ring buffer with FrameMeta
 │   ├── monitor_loop.py               # Async orchestrator: IDLE/ACTIVE modes, pub/sub output
-│   ├── main.py                       # FastAPI server (REST + SSE endpoints)
+│   ├── audio_manager.py              # TTS audio resampling (24kHz→48kHz) + pub/sub delivery
+│   ├── main.py                       # FastAPI server (REST + SSE + audio stream endpoints)
 │   ├── static/
 │   │   └── index.html                # Web UI (vanilla HTML/JS/CSS)
 │   └── requirements.txt              # Python dependencies

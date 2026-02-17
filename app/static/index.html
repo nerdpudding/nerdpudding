@@ -43,13 +43,24 @@
   .source-row { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
   .source-row input { flex: 1; padding: 6px 10px; border: 1px solid #0f3460; border-radius: 6px; background: #1a1a2e; color: #e0e0e0; font-size: 13px; }
   .source-row label { font-size: 12px; color: #888; white-space: nowrap; }
+
+  .btn-audio { background: #0f3460; color: #e0e0e0; font-size: 18px; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; padding: 0; }
+  .btn-audio:hover { background: #1a4a8a; }
+  .btn-audio.muted { background: #8b0000; }
+  .btn-audio.muted:hover { background: #a00; }
+  .tts-badge { font-size: 11px; color: #666; margin-left: 8px; font-family: monospace; }
+  .tts-badge.active { color: #1b8a2e; }
 </style>
 </head>
 <body>
 
 <header>
   <h1>Video Chat with AI</h1>
-  <span id="status-badge" class="idle">IDLE</span>
+  <div style="display:flex;align-items:center;gap:8px;">
+    <span id="status-badge" class="idle">IDLE</span>
+    <button class="btn-primary btn-audio" id="btn-audio" title="Toggle TTS audio" style="display:none">&#x1f50a;</button>
+    <span id="tts-badge" class="tts-badge"></span>
+  </div>
 </header>
 
 <div class="main">
@@ -193,6 +204,7 @@ btnStart.addEventListener('click', async () => {
     btnSend.disabled = false;
     startMJPEG();
     connectSSE();
+    if (!audioMuted && ttsEnabled) startAudioStream();
     fetchStatus();
   } catch (e) { alert('Failed to start: ' + e.message); }
 });
@@ -206,6 +218,7 @@ btnStop.addEventListener('click', async () => {
     btnSend.disabled = true;
     stopMJPEG();
     disconnectSSE();
+    stopAudioStream();
     fetchStatus();
   } catch (e) { alert('Failed to stop: ' + e.message); }
 });
@@ -226,7 +239,124 @@ async function sendInstruction() {
   } catch (e) { alert('Failed to send: ' + e.message); }
 }
 
+// --- TTS Audio Playback (Web Audio API + streaming fetch) ---
+
+const btnAudio = document.getElementById('btn-audio');
+const ttsBadge = document.getElementById('tts-badge');
+let audioCtx = null;
+let audioMuted = false;
+let audioAbort = null;
+let nextPlayTime = 0;
+let ttsEnabled = false;
+
+async function checkTTS() {
+  try {
+    const res = await fetch(API + '/api/status');
+    const s = await res.json();
+    ttsEnabled = s.tts_enabled;
+    if (ttsEnabled) {
+      btnAudio.style.display = 'flex';
+      ttsBadge.textContent = 'TTS';
+      ttsBadge.className = 'tts-badge active';
+    } else {
+      btnAudio.style.display = 'none';
+      ttsBadge.textContent = '';
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function pcmInt16ToFloat32(buffer) {
+  const int16 = new Int16Array(buffer);
+  const float32 = new Float32Array(int16.length);
+  for (let i = 0; i < int16.length; i++) {
+    float32[i] = int16[i] / 32768;
+  }
+  return float32;
+}
+
+async function startAudioStream() {
+  if (!ttsEnabled || audioMuted) return;
+
+  // AudioContext must be created after user gesture (browser policy)
+  if (!audioCtx) {
+    audioCtx = new AudioContext({ sampleRate: 48000 });
+  }
+  if (audioCtx.state === 'suspended') {
+    await audioCtx.resume();
+  }
+
+  stopAudioStream();
+  audioAbort = new AbortController();
+  nextPlayTime = 0;
+
+  try {
+    const res = await fetch(API + '/api/audio-stream', { signal: audioAbort.signal });
+    const reader = res.body.getReader();
+
+    let leftover = new Uint8Array(0);
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      // Combine leftover bytes with new chunk (int16 = 2 bytes per sample)
+      const combined = new Uint8Array(leftover.length + value.length);
+      combined.set(leftover);
+      combined.set(value, leftover.length);
+
+      // Process complete int16 samples, keep odd byte as leftover
+      const usableBytes = combined.length - (combined.length % 2);
+      if (usableBytes === 0) {
+        leftover = combined;
+        continue;
+      }
+      leftover = combined.slice(usableBytes);
+
+      const float32 = pcmInt16ToFloat32(combined.slice(0, usableBytes).buffer);
+      const audioBuffer = audioCtx.createBuffer(1, float32.length, 48000);
+      audioBuffer.getChannelData(0).set(float32);
+
+      const source = audioCtx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioCtx.destination);
+
+      const now = audioCtx.currentTime;
+      if (nextPlayTime < now) {
+        nextPlayTime = now + 0.05; // small buffer to avoid glitches
+      }
+      source.start(nextPlayTime);
+      nextPlayTime += audioBuffer.duration;
+    }
+  } catch (e) {
+    if (e.name !== 'AbortError') {
+      console.warn('Audio stream error:', e);
+    }
+  }
+}
+
+function stopAudioStream() {
+  if (audioAbort) {
+    audioAbort.abort();
+    audioAbort = null;
+  }
+  nextPlayTime = 0;
+}
+
+btnAudio.addEventListener('click', () => {
+  audioMuted = !audioMuted;
+  if (audioMuted) {
+    btnAudio.innerHTML = '&#x1f507;';
+    btnAudio.classList.add('muted');
+    stopAudioStream();
+  } else {
+    btnAudio.innerHTML = '&#x1f50a;';
+    btnAudio.classList.remove('muted');
+    startAudioStream();
+  }
+});
+
 // Initial status check
+checkTTS();
 fetchStatus();
 </script>
 

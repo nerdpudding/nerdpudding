@@ -294,3 +294,102 @@ The ~5s inference with short prompt (1-2 sentences) is what we expect in the mon
 | `TTS_FLOAT16` | false | Float16 vocoder (currently broken, see Bug 1) |
 
 ---
+
+## Step 4: Audio Delivery Pipeline
+
+### Goal
+
+Make TTS audio available to consumers via an HTTP endpoint. Step 3 produces audio; Step 4 delivers it.
+
+### Implementation
+
+**New file: `app/audio_manager.py`**
+
+Pub/sub pattern for audio delivery (same pattern as MonitorLoop's text pub/sub):
+- Receives 24kHz float32 torch tensors from `infer_with_audio()`
+- Resamples to 48kHz int16 PCM using `scipy.signal.resample_poly` (WebRTC/playback standard)
+- Distributes to subscriber queues (API endpoint, future LiveKit bot)
+- Stop signal propagation for clean shutdown
+
+Static method `resample_to_48k_int16(audio_24k: torch.Tensor) -> bytes` handles the conversion.
+
+**Modified: `app/monitor_loop.py`**
+
+`_inference_worker()` now branches on `self._model.tts_enabled`:
+- TTS enabled: calls `infer_with_audio()`, publishes text chunks to text subscribers AND audio chunks (via AudioManager) to audio subscribers
+- TTS disabled: calls `infer()` as before (no behavioral change)
+
+`MonitorLoop.__init__()` accepts optional `AudioManager` parameter.
+
+**Modified: `app/main.py`**
+
+- AudioManager created in lifespan (only when `ENABLE_TTS=true`)
+- Passed to MonitorLoop constructor
+- Shutdown calls `audio_manager.stop()` to signal all audio subscribers
+- `StatusResponse` includes `tts_enabled: bool`
+- New endpoint: `GET /api/audio-stream` — raw PCM stream (48kHz, mono, int16 LE)
+  - Returns 404 when TTS not enabled
+  - Headers include format metadata (`X-Audio-Rate`, `X-Audio-Channels`, `X-Audio-Format`)
+  - Subscriber-based: each connection gets its own queue (independent consumers)
+  - 15s keepalive timeout for idle connections
+
+### Code changes
+
+- New: `app/audio_manager.py` — AudioManager class with resample + pub/sub
+- `app/monitor_loop.py` — AudioManager integration in constructor and `_inference_worker()`
+- `app/main.py` — AudioManager in lifespan, `/api/audio-stream` endpoint, `tts_enabled` in StatusResponse
+
+### Test results
+
+**Unit tests (AudioManager):**
+- Resample: 24000 samples at 24kHz → 48000 samples at 48kHz (96000 bytes) — correct
+- Pub/sub: subscribe → publish → receive → unsubscribe — correct
+- Stop signal: `stop()` delivers `None` to all subscribers — correct
+
+**Integration tests (server with TTS disabled):**
+- `/api/status` returns `tts_enabled: false` — OK
+- `/api/audio-stream` returns 404 — OK
+- All existing endpoints unaffected — OK
+- Server starts and shuts down cleanly — OK
+
+**API usage:**
+```bash
+# Stream raw PCM audio (when TTS enabled)
+curl http://localhost:8199/api/audio-stream > audio.pcm
+ffplay -f s16le -ar 48000 -ac 1 audio.pcm
+
+# Or pipe directly
+curl -s http://localhost:8199/api/audio-stream | ffplay -f s16le -ar 48000 -ac 1 -
+```
+
+### Browser audio playback
+
+Added Web Audio API player to `app/static/index.html`:
+- Fetches `/api/audio-stream` as a streaming response via `fetch()` + `ReadableStream`
+- Converts int16 PCM chunks to float32 for Web Audio API
+- Schedules chunks as `AudioBufferSourceNode` for gapless playback
+- Speaker button in header: mute/unmute toggle, hidden when TTS disabled
+- "TTS" badge in header indicates TTS is active
+
+### Live test results
+
+Tested with `ENABLE_TTS=true`, video file, commentator prompt:
+- **Audio delivery works**: TTS audio plays in browser via Web Audio API
+- **Text streaming works**: SSE text commentary unaffected, still real-time
+- **Mute/unmute works**: speaker button toggles audio stream on/off
+- **TTS disabled mode**: speaker button hidden, everything works as before
+
+### Known issue: audio-commentary timing
+
+With TTS enabled, the timing between cycles doesn't feel right. Text commentary can fire rapid short cycles, but audio takes longer to generate and play back. The audio can mostly keep up, but the pacing feels off — cycles come too fast for the audio to finish naturally.
+
+**Potential solutions to explore:**
+- Adjust COMMENTATOR_PROMPT for shorter responses when TTS is active (fewer words = shorter audio)
+- Increase INFERENCE_INTERVAL when TTS is enabled (give audio time to play before next cycle)
+- Add a pause/cooldown after audio finishes before starting next inference
+- Dynamic timing: monitor audio queue depth, delay next cycle until audio buffer drains
+- Different approach: batch multiple short text cycles into one audio output
+
+This is a UX/tuning problem, not a bug. The pipeline works correctly — the pacing just needs optimization for the audio modality.
+
+---

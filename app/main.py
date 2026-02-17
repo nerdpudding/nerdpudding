@@ -12,7 +12,9 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from app.audio_manager import AudioManager
 from app.config import (
+    ENABLE_TTS,
     FRAME_JPEG_QUALITY,
     MJPEG_FPS,
     SERVER_HOST,
@@ -46,6 +48,7 @@ class StatusResponse(BaseModel):
     instruction: Optional[str]
     cycle_count: int
     frames_buffered: int
+    tts_enabled: bool
 
 
 # --- App lifecycle ---
@@ -57,12 +60,14 @@ async def lifespan(app: FastAPI):
     model = ModelServer()
     window = SlidingWindow()
     capture = FrameCapture(on_frame=window.push)
-    monitor = MonitorLoop(model, window)
+    audio_manager = AudioManager() if ENABLE_TTS else None
+    monitor = MonitorLoop(model, window, audio_manager=audio_manager)
 
     app.state.model = model
     app.state.window = window
     app.state.capture = capture
     app.state.monitor = monitor
+    app.state.audio_manager = audio_manager
     app.state.monitor_task = asyncio.create_task(monitor.run())
     await monitor.wait_started()
 
@@ -71,6 +76,8 @@ async def lifespan(app: FastAPI):
 
     logger.info("Shutting down...")
     monitor.stop()
+    if audio_manager is not None:
+        audio_manager.stop()
     capture.stop()
     await app.state.monitor_task
 
@@ -106,6 +113,7 @@ async def get_status(request: Request):
         instruction=monitor.instruction,
         cycle_count=monitor.cycle_count,
         frames_buffered=window.count,
+        tts_enabled=ENABLE_TTS,
     )
 
 
@@ -234,6 +242,47 @@ async def mjpeg_stream(request: Request):
         generate(),
         media_type="multipart/x-mixed-replace; boundary=frame",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.get("/api/audio-stream")
+async def audio_stream(request: Request):
+    """Raw PCM audio stream from TTS output.
+
+    Format: 48kHz, mono, int16 little-endian.
+    Use with: ffplay -f s16le -ar 48000 -ac 1 <url>
+    Returns 404 if TTS is not enabled.
+    """
+    audio_mgr = request.app.state.audio_manager
+    if audio_mgr is None:
+        raise HTTPException(404, "TTS not enabled. Start with ENABLE_TTS=true")
+
+    async def generate():
+        q = audio_mgr.subscribe()
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    data = await asyncio.wait_for(q.get(), timeout=15.0)
+                    if data is None:
+                        break
+                    yield data
+                except asyncio.TimeoutError:
+                    continue
+        finally:
+            audio_mgr.unsubscribe(q)
+
+    return StreamingResponse(
+        generate(),
+        media_type="application/octet-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "X-Audio-Rate": "48000",
+            "X-Audio-Channels": "1",
+            "X-Audio-Format": "s16le",
+        },
     )
 
 

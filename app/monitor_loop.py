@@ -6,9 +6,11 @@ from typing import AsyncGenerator, Optional, Union
 import numpy as np
 from PIL import Image
 
+from app.audio_manager import AudioManager
 from app.config import (
     CHANGE_THRESHOLD,
     COMMENTATOR_PROMPT,
+    ENABLE_TTS,
     FRAME_STRIDE,
     FRAMES_PER_INFERENCE,
     INFERENCE_INTERVAL,
@@ -32,9 +34,11 @@ class MonitorLoop:
     can each subscribe and independently receive all events.
     """
 
-    def __init__(self, model: ModelServer, window: SlidingWindow):
+    def __init__(self, model: ModelServer, window: SlidingWindow,
+                 audio_manager: Optional[AudioManager] = None):
         self._model = model
         self._window = window
+        self._audio_manager = audio_manager
         self._instruction: Optional[str] = None
         self._running = False
         self._generating = False
@@ -226,9 +230,20 @@ class MonitorLoop:
                           cycle_num, frame_ids, frame_timestamps, t0) -> str:
         """Runs in thread pool. Streams chunks to all subscribers. Returns full response."""
         chunks = []
-        for chunk in self._model.infer(frames, prompt, stream=True):
-            chunks.append(chunk)
-            loop.call_soon_threadsafe(self._publish, chunk)
+        if self._model.tts_enabled:
+            for result in self._model.infer_with_audio(frames, prompt):
+                if result.text:
+                    chunks.append(result.text)
+                    loop.call_soon_threadsafe(self._publish, result.text)
+                if result.audio is not None and self._audio_manager is not None:
+                    pcm = AudioManager.resample_to_48k_int16(result.audio)
+                    loop.call_soon_threadsafe(self._audio_manager.publish, pcm)
+                if result.is_last:
+                    break
+        else:
+            for chunk in self._model.infer(frames, prompt, stream=True):
+                chunks.append(chunk)
+                loop.call_soon_threadsafe(self._publish, chunk)
         full_response = "".join(chunks)
         t_end = time.time()
         meta = {
