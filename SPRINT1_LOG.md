@@ -87,3 +87,53 @@ The model correctly described a Raspberry Pi robot car from the test image, with
 - `transformers==4.51.0` shows a deprecation warning about `seen_tokens` -- harmless, will go away when/if the model code is updated upstream.
 
 ---
+
+## Step 3: Frame Capture
+
+### Library evaluation
+
+Evaluated video capture libraries for our requirements (webcam, video files, later RTSP/v4l2loopback, 1 FPS, PIL output, background thread, Docker compatible):
+
+| Library | Strengths | Weaknesses | Verdict |
+|---------|-----------|------------|---------|
+| **OpenCV** (`cv2.VideoCapture`) | Simplest API, already installed, webcam + files + v4l2 + RTSP | No built-in threading | **Chosen for PoC** |
+| **VidGear/CamGear** | Built-in threaded capture, better stream protocol support | Extra dependency, threading optimization irrelevant at 1 FPS | Consider for Sprint 2 |
+| **ffmpegcv** | Lightweight FFmpeg wrapper, GPU decode, good stream support | Less established, extra dependency | Interesting alternative for later |
+| **GStreamer** | Most flexible, native HW acceleration plugins | Steep learning curve, overkill for PoC | No |
+
+**Decision: OpenCV.** At 1 FPS capture rate, frame capture performance is irrelevant -- model inference (11.5s) is the bottleneck, not reading a single frame. OpenCV covers all MVP sources (webcam, video files) and also supports v4l2loopback devices and RTSP for Sprint 2. Threading is a simple daemon thread wrapper. The modular design (`frame_capture.py` behind a clean interface) allows swapping the backend later without affecting the rest of the app.
+
+### Files created
+
+- `app/frame_capture.py` -- background thread capture with `on_frame` callback
+- `app/sliding_window.py` -- thread-safe ring buffer (deque, max 16 frames)
+- `scripts/test_capture.py` -- standalone test for capture + window
+
+### Bug found and fixed: sequential frame reading for video files
+
+OpenCV's `cv2.VideoCapture.read()` reads frames sequentially for video files -- each call returns the next frame regardless of elapsed time. At 25 FPS source and 1 FPS capture, 5 reads in 5 seconds only covered the first 0.2 seconds of video.
+
+**Fix:** For video files, skip `src_fps / CAPTURE_FPS` frames per interval using `grab()` (fast, no decode) before `read()` (decode only the target frame). This simulates real-time playback. Not needed for live sources (webcam) where `read()` always returns the latest frame.
+
+### Test result
+
+```bash
+python -m scripts.test_capture --source test_files/videos/test.mp4
+```
+
+- Test video: 9.6s, 25.1 FPS, 1264x720
+- Auto-detected video duration, captured for full length
+- 10 frames captured at 1 FPS, evenly spread across the video
+- All frames saved to `test_files/videos/capture_test/` for visual verification
+- Frame quality matches source video (no additional compression)
+- Sliding window correctly held all frames with push/get working across threads
+
+---
+
+## Step 4: Sliding Window
+
+Implemented together with Step 3. Simple `collections.deque` with `maxlen=WINDOW_SIZE` (default 16). Thread-safe via `threading.Lock`. Capture thread pushes, inference loop reads. Old frames auto-evicted.
+
+No separate test needed -- validated as part of the capture test above.
+
+---

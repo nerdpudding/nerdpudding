@@ -30,6 +30,6 @@
 
 | Sprint | Status |
 |--------|--------|
-| Sprint 1 | In progress (Step 2 of 8 complete) |
+| Sprint 1 | In progress (Step 4 of 8 complete) |
 | Sprint 2 | Planned |
 | Sprint 3 | Planned |

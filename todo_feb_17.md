@@ -11,8 +11,8 @@
 
 - [x] Step 1: Environment setup (conda, dependencies, model download)
 - [x] Step 2: Model server (model loading, streaming inference, test)
-- [ ] Step 3: Frame capture (OpenCV, background thread)
-- [ ] Step 4: Sliding window (ring buffer)
+- [x] Step 3: Frame capture (OpenCV, background thread)
+- [x] Step 4: Sliding window (ring buffer)
 - [ ] Step 5: Monitor loop (orchestrator)
 - [ ] Step 6: FastAPI server (endpoints, SSE)
 - [ ] Step 7: Web UI (vanilla HTML/JS)
