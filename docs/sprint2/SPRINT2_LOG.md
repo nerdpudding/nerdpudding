@@ -173,4 +173,8 @@ Cycle 7: inference=1.64s, target_delay=3.29s
 | `MJPEG_FPS` | 10 | Fallback display FPS for live sources without known FPS |
 | `WINDOW_SIZE` | 32 | Increased from 16 for delay headroom |
 
+### Milestone: PoC Complete
+
+With Steps 1, 1b, and 2 done, the project has a successful proof of concept: smooth native-rate video playback with real-time AI commentary, adaptively synchronized, running on consumer GPU hardware (~8.6 GB VRAM). All subsequent steps (TTS, LiveKit, Docker, etc.) are enhancements to an already working system.
+
 ---

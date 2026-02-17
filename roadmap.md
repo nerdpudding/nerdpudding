@@ -18,8 +18,12 @@
 
 ## Sprint 2 — Input Agnosticism, TTS, WebRTC, Docker
 
-- [ ] AWQ INT4 model support (11 GB VRAM, 38% faster, BF16 fallback)
-- [ ] MJPEG streaming endpoint (smooth video in UI, replaces frame polling)
+### Milestone: PoC Complete (after Step 2)
+
+Steps 1-2 deliver a successful proof of concept: smooth native-rate video with real-time AI commentary, adaptively synced, on consumer GPU hardware with ~8.6 GB VRAM. Everything from Step 3 onward is enhancement, not core validation.
+
+- [x] AWQ INT4 model support (~8.6 GB VRAM, BF16 fallback via env var)
+- [x] MJPEG streaming with adaptive sync (native FPS display, EMA delay tracking)
 - [ ] TTS integration (model's built-in streaming TTS, 24kHz audio output)
 - [ ] Audio delivery pipeline (AudioManager, resampling, /api/audio-stream)
 - [ ] Docker setup (GPU passthrough, model as bind mount, docker-compose)
