@@ -104,7 +104,7 @@ The model continuously receives recent frames and generates output. The user can
 |  |                  |    |                     |    |                | |
 |  | - Camera capture |    | - Model inference   |    | - Video view   | |
 |  | - Virtual cam    |    | - Frame processing  |    | - Chat panel   | |
-|  | - Stream ingest  |    | - WebSocket server  |    | - Text input   | |
+|  | - Stream ingest  |    | - SSE streaming     |    | - Text input   | |
 |  |                  |    | - Audio processing* |    | - Voice input* | |
 |  +------------------+    +--------------------+    +----------------+ |
 |                                   |                                   |

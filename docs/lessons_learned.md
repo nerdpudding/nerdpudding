@@ -33,3 +33,47 @@ Ongoing log of what worked and what didn't during development. Primarily intende
 **Rule:** Set `HF_HOME` to a project-local path before importing transformers. Do it at module level, before the import statement, not inside a function that runs later.
 
 ---
+
+## asyncio.create_task does not execute immediately
+
+**Lesson:** `asyncio.create_task(coro)` schedules the coroutine but does not run it until the current coroutine yields. Code that depends on the task having started (checking flags, calling methods) will see stale state.
+
+**Example (Sprint 1, Step 5):** The monitor loop was started with `create_task(monitor.run())`, but consumers that checked `monitor._running` immediately after saw `False` and exited -- producing no output. Also, calling `stop()` before `run()` actually started caused `run()` to override `_running` back to `True`, creating an infinite loop.
+
+**Fix:** Added an `asyncio.Event` (`_started`) that `run()` sets when it begins executing, and a `wait_started()` method for consumers to await. Also added `_stop_requested` flag to prevent `run()` from starting after `stop()`.
+
+**Rule:** When starting async tasks that other code depends on, use an Event or similar synchronization primitive. Never rely on flags set inside the task being visible immediately after `create_task()`.
+
+---
+
+## Commentator-style prompting produces better live commentary
+
+**Lesson:** Open-ended prompts like "describe what you see" produce long, repetitive responses that are slow and hard to follow. A structured system prompt with explicit rules dramatically improves quality for live commentary.
+
+**Example (Sprint 1, Step 8):** Switching from bare user instructions to a commentator system prompt (1-2 sentences, change-only focus, no repetition, "..." for unchanged scenes) cut inference time from 7-9s to 1.2-2.3s per cycle and made responses much more useful. Adding context carry-over ("your last comment was: ...") prevented the model from repeating itself across cycles.
+
+**Rule:** For continuous monitoring use cases, always use a system prompt that constrains response length and focuses on changes. Include the previous response in the prompt to prevent repetition.
+
+---
+
+## Centralize all configuration from the start
+
+**Lesson:** Hardcoded values scattered across multiple Python files make it difficult to tune the system and easy to miss when adjusting parameters.
+
+**Example (Sprint 1, Step 8):** After building the full pipeline, values like JPEG quality, suppress tokens, and the commentator prompt were hardcoded in various files. Moving everything to a single `config.py` with env var overrides made it possible to tune latency, response length, and behavior without editing code.
+
+**Rule:** Create a central config file at the start of a project. Every parameter that might need tuning should be there from day one, overridable via environment variables.
+
+---
+
+## Video files read sequentially in OpenCV, not by time
+
+**Lesson:** `cv2.VideoCapture.read()` returns the next frame in sequence for video files, regardless of elapsed time. At 25 FPS source and 1 FPS capture rate, reading once per second gives you frames 0, 1, 2... (covering 0.04s each), not frames spread across the video.
+
+**Example (Sprint 1, Step 3):** The capture thread read one frame per second, but 5 reads in 5 seconds only covered the first 0.2 seconds of a 25 FPS video.
+
+**Fix:** For video files, skip `src_fps / capture_fps` frames per interval using `grab()` (fast, no decode) before `read()` (decode only the target frame). Not needed for live sources where `read()` returns the latest frame.
+
+**Rule:** When capturing from video files at a lower rate than the source FPS, use `grab()` to skip intermediate frames. Only call `retrieve()`/`read()` on the frame you actually want.
+
+---

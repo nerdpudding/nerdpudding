@@ -17,6 +17,15 @@ Local, GPU-accelerated application for real-time video conversation with a multi
 
 ## Getting Started
 
+### Prerequisites
+
+- NVIDIA GPU with 20+ GB VRAM (tested on RTX 4090, 16.4 GB used)
+- CUDA 12.x installed
+- Miniconda or Anaconda
+- ~20 GB disk space for model files
+
+### Quick Start
+
 ```bash
 git clone <your-repo-url>
 cd video_chat
@@ -24,6 +33,53 @@ cd video_chat
 # Clone the reference repos (not included in this repo)
 git clone https://github.com/OpenBMB/MiniCPM-o.git
 git clone https://github.com/OpenBMB/MiniCPM-V-CookBook.git
+
+# 1. Create conda environment
+conda create -n video_chat python=3.12 -y
+conda activate video_chat
+pip install -r app/requirements.txt
+
+# 2. Download model (~19 GB)
+huggingface-cli download openbmb/MiniCPM-o-4_5 --local-dir models/MiniCPM-o-4_5
+
+# 3. Apply required model patch (see docs/model_patches.md for details)
+#    One-line fix in models/MiniCPM-o-4_5/modeling_minicpmo.py
+
+# 4. Start the server
+python -m app.main
+# Server starts on http://localhost:8199
+
+# 5. Open browser to http://localhost:8199
+#    - Enter a video source (file path, device ID, or stream URL)
+#    - Click Start, type an instruction, watch the AI commentary stream in
+```
+
+### Testing Without a Browser
+
+```bash
+# Test model loading + inference on a single image
+python -m scripts.test_model --image test_files/images/test.jpg
+
+# Test frame capture from a video file
+python -m scripts.test_capture --source test_files/videos/test.mp4
+
+# Test full pipeline (model + capture + commentary loop)
+python -m scripts.test_monitor --source test_files/videos/test.mp4 --cycles 2
+```
+
+### Configuration
+
+All settings are in `app/config.py` and overridable via environment variables:
+
+```bash
+# Lower latency: fewer frames, higher capture rate
+FRAMES_PER_INFERENCE=4 CAPTURE_FPS=2 python -m app.main
+
+# Shorter responses
+MAX_NEW_TOKENS=256 python -m app.main
+
+# Different GPU
+CUDA_VISIBLE_DEVICES=1 python -m app.main
 ```
 
 These repos are used as reference material only -- see [Resources](#resources) for details.
@@ -93,12 +149,24 @@ Proof of concept with iterative sprints. Start minimal, find limitations, improv
 
 See the [Project hierarchy](AI_INSTRUCTIONS.md#project-hierarchy) in AI_INSTRUCTIONS.md for what each folder and file is for, including the agent table and usage guidelines.
 
+## Current Status
+
+**Sprint 1 complete.** Working MVP: continuous video monitoring with real-time AI commentary, steerable mid-stream. See [Sprint 1 Review](docs/sprint1/SPRINT1_REVIEW.md) for detailed findings.
+
+| Metric | Value |
+|--------|-------|
+| Model VRAM usage | 16.4 GB |
+| Inference per cycle | 1.2-2.3s |
+| End-to-end latency | 8-11s |
+| Capture rate | 1 FPS |
+
 ## Documentation
 
 - [AI Instructions](AI_INSTRUCTIONS.md) -- project rules, hierarchy, agent table
 - [Detailed Concept](concepts/concept.md) -- full concept with diagrams and technical details
-- [Roadmap](roadmap.md) -- project roadmap
-- [Sprint 1 Log](SPRINT1_LOG.md) -- setup steps, test results, findings
+- [Roadmap](roadmap.md) -- project roadmap and sprint status
+- [Sprint 1 Review](docs/sprint1/SPRINT1_REVIEW.md) -- sprint summary, findings, Sprint 2 ideas
+- [Sprint 1 Log](docs/sprint1/SPRINT1_LOG.md) -- setup steps, test results, findings
 - [Model Patches](docs/model_patches.md) -- patches applied to model files (must reapply after update)
 - [Lessons Learned](docs/lessons_learned.md) -- what worked and didn't (context for AI assistants)
 - [docs/](docs/) -- all guides and reference documentation

@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Video Chat with AI</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #1a1a2e; color: #e0e0e0; height: 100vh; display: flex; flex-direction: column; }
+  header { padding: 12px 20px; background: #16213e; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #0f3460; }
+  header h1 { font-size: 18px; font-weight: 600; }
+  #status-badge { font-size: 13px; padding: 4px 12px; border-radius: 12px; background: #333; }
+  #status-badge.idle { background: #555; }
+  #status-badge.active { background: #1b8a2e; }
+
+  .main { flex: 1; display: flex; overflow: hidden; }
+  .video-panel { flex: 1; display: flex; flex-direction: column; padding: 12px; border-right: 1px solid #0f3460; }
+  .commentary-panel { flex: 1; display: flex; flex-direction: column; padding: 12px; }
+
+  .panel-title { font-size: 13px; text-transform: uppercase; color: #888; margin-bottom: 8px; letter-spacing: 1px; }
+  #video-frame { width: 100%; flex: 1; object-fit: contain; background: #111; border-radius: 6px; }
+  #no-video { width: 100%; flex: 1; display: flex; align-items: center; justify-content: center; background: #111; border-radius: 6px; color: #555; font-size: 14px; }
+
+  #commentary { flex: 1; overflow-y: auto; padding: 8px; background: #111; border-radius: 6px; font-size: 14px; line-height: 1.6; }
+  .cycle-block { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #333; }
+  .cycle-block:last-child { border-bottom: none; }
+  .cycle-label { font-size: 11px; color: #666; margin-bottom: 4px; font-family: monospace; }
+  .cycle-meta { font-size: 11px; color: #555; margin-top: 6px; font-family: monospace; }
+  .cycle-text { white-space: pre-wrap; }
+
+  .controls { padding: 12px 20px; background: #16213e; border-top: 1px solid #0f3460; display: flex; gap: 10px; align-items: center; }
+  .controls input { flex: 1; padding: 8px 12px; border: 1px solid #0f3460; border-radius: 6px; background: #1a1a2e; color: #e0e0e0; font-size: 14px; }
+  .controls input::placeholder { color: #666; }
+  .controls button { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; }
+  .btn-primary { background: #0f3460; color: #e0e0e0; }
+  .btn-primary:hover { background: #1a4a8a; }
+  .btn-danger { background: #8b0000; color: #e0e0e0; }
+  .btn-danger:hover { background: #a00; }
+  .btn-send { background: #1b8a2e; color: #fff; }
+  .btn-send:hover { background: #25a83a; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .source-row { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
+  .source-row input { flex: 1; padding: 6px 10px; border: 1px solid #0f3460; border-radius: 6px; background: #1a1a2e; color: #e0e0e0; font-size: 13px; }
+  .source-row label { font-size: 12px; color: #888; white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Video Chat with AI</h1>
+  <span id="status-badge" class="idle">IDLE</span>
+</header>
+
+<div class="main">
+  <div class="video-panel">
+    <div class="panel-title">Video</div>
+    <div class="source-row">
+      <label>Source:</label>
+      <input type="text" id="source-input" value="test_files/videos/test.mp4" placeholder="File path, device ID (0), or stream URL (rtsp://...)">
+      <button class="btn-primary" id="btn-start">Start</button>
+      <button class="btn-danger" id="btn-stop" disabled>Stop</button>
+    </div>
+    <img id="video-frame" style="display:none" alt="Video frame">
+    <div id="no-video">No video source active</div>
+  </div>
+
+  <div class="commentary-panel">
+    <div class="panel-title">AI Commentary</div>
+    <div id="commentary"></div>
+  </div>
+</div>
+
+<div class="controls">
+  <input type="text" id="instruction-input" placeholder="Type an instruction, e.g. 'describe what you see'" disabled>
+  <button class="btn-send" id="btn-send" disabled>Send</button>
+</div>
+
+<script>
+const API = '';
+const FRAME_POLL_MS = 500;
+
+const img = document.getElementById('video-frame');
+const noVideo = document.getElementById('no-video');
+const commentary = document.getElementById('commentary');
+const badge = document.getElementById('status-badge');
+const srcInput = document.getElementById('source-input');
+const instrInput = document.getElementById('instruction-input');
+const btnStart = document.getElementById('btn-start');
+const btnStop = document.getElementById('btn-stop');
+const btnSend = document.getElementById('btn-send');
+
+let frameTimer = null;
+let eventSource = null;
+let cycleCount = 0;
+let currentBlock = null;
+
+// --- Status polling ---
+
+async function fetchStatus() {
+  try {
+    const res = await fetch(API + '/api/status');
+    const s = await res.json();
+    badge.textContent = s.monitor_mode;
+    badge.className = s.monitor_mode === 'ACTIVE' ? 'active' : 'idle';
+  } catch (e) { /* ignore */ }
+}
+
+// --- Frame polling ---
+
+function startFramePolling() {
+  stopFramePolling();
+  frameTimer = setInterval(() => {
+    const url = API + '/api/frame?' + Date.now();
+    const tmp = new Image();
+    tmp.onload = () => {
+      img.src = tmp.src;
+      img.style.display = 'block';
+      noVideo.style.display = 'none';
+    };
+    tmp.src = url;
+  }, FRAME_POLL_MS);
+}
+
+function stopFramePolling() {
+  if (frameTimer) { clearInterval(frameTimer); frameTimer = null; }
+  img.style.display = 'none';
+  noVideo.style.display = 'flex';
+}
+
+// --- SSE stream ---
+
+function connectSSE() {
+  disconnectSSE();
+  eventSource = new EventSource(API + '/api/stream');
+
+  eventSource.addEventListener('message', (e) => {
+    if (!currentBlock) newCycleBlock();
+    const textEl = currentBlock.querySelector('.cycle-text');
+    textEl.textContent += e.data;
+    commentary.scrollTop = commentary.scrollHeight;
+  });
+
+  eventSource.addEventListener('cycle_end', (e) => {
+    try {
+      const meta = JSON.parse(e.data);
+      if (currentBlock) {
+        const ts = (t) => new Date(t * 1000).toLocaleTimeString();
+        const metaEl = document.createElement('div');
+        metaEl.className = 'cycle-meta';
+        metaEl.textContent =
+          'Frames #' + meta.frame_ids[0] + '-#' + meta.frame_ids[meta.frame_ids.length - 1] +
+          ' | Captured ' + ts(meta.oldest_frame_at) + '-' + ts(meta.newest_frame_at) +
+          ' | Inference: ' + meta.inference_sec + 's' +
+          ' | Latency: ' + meta.latency_sec + 's';
+        currentBlock.appendChild(metaEl);
+        commentary.scrollTop = commentary.scrollHeight;
+      }
+    } catch (err) { /* ignore parse errors */ }
+    currentBlock = null;
+    fetchStatus();
+  });
+
+  eventSource.onerror = () => {
+    // Auto-reconnect is built into EventSource
+  };
+}
+
+function disconnectSSE() {
+  if (eventSource) { eventSource.close(); eventSource = null; }
+}
+
+function newCycleBlock() {
+  cycleCount++;
+  const block = document.createElement('div');
+  block.className = 'cycle-block';
+  block.innerHTML = '<div class="cycle-label">Cycle ' + cycleCount + '</div><div class="cycle-text"></div>';
+  commentary.appendChild(block);
+  currentBlock = block;
+  commentary.scrollTop = commentary.scrollHeight;
+}
+
+// --- Controls ---
+
+btnStart.addEventListener('click', async () => {
+  const source = srcInput.value.trim();
+  if (!source) return;
+  try {
+    const body = /^\d+$/.test(source) ? { source: parseInt(source) } : { source };
+    const res = await fetch(API + '/api/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) { alert((await res.json()).detail); return; }
+    btnStart.disabled = true;
+    btnStop.disabled = false;
+    instrInput.disabled = false;
+    btnSend.disabled = false;
+    startFramePolling();
+    connectSSE();
+    fetchStatus();
+  } catch (e) { alert('Failed to start: ' + e.message); }
+});
+
+btnStop.addEventListener('click', async () => {
+  try {
+    await fetch(API + '/api/stop', { method: 'POST' });
+    btnStart.disabled = false;
+    btnStop.disabled = true;
+    instrInput.disabled = true;
+    btnSend.disabled = true;
+    stopFramePolling();
+    disconnectSSE();
+    fetchStatus();
+  } catch (e) { alert('Failed to stop: ' + e.message); }
+});
+
+btnSend.addEventListener('click', sendInstruction);
+instrInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendInstruction(); });
+
+async function sendInstruction() {
+  const text = instrInput.value.trim();
+  if (!text) return;
+  try {
+    await fetch(API + '/api/instruction', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instruction: text }),
+    });
+    fetchStatus();
+  } catch (e) { alert('Failed to send: ' + e.message); }
+}
+
+// Initial status check
+fetchStatus();
+</script>
+
+</body>
+</html>

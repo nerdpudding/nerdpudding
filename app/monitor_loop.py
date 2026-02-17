@@ -1,9 +1,17 @@
 import asyncio
 import logging
 import time
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator, Optional, Union
 
-from app.config import FRAMES_PER_INFERENCE, INFERENCE_INTERVAL
+import numpy as np
+from PIL import Image
+
+from app.config import (
+    CHANGE_THRESHOLD,
+    COMMENTATOR_PROMPT,
+    FRAMES_PER_INFERENCE,
+    INFERENCE_INTERVAL,
+)
 from app.model_server import ModelServer
 from app.sliding_window import SlidingWindow
 
@@ -16,6 +24,9 @@ class MonitorLoop:
     Two modes:
     - IDLE: frames buffered, no inference (no instruction set)
     - ACTIVE: periodic inference with current instruction
+
+    Uses pub/sub for output: multiple consumers (SSE, WebSocket, test scripts)
+    can each subscribe and independently receive all events.
     """
 
     def __init__(self, model: ModelServer, window: SlidingWindow):
@@ -27,8 +38,12 @@ class MonitorLoop:
         self._stop_requested = False
         self._started = asyncio.Event()
         self._cycle_event = asyncio.Event()
-        self._chunks: asyncio.Queue[Optional[str]] = asyncio.Queue()
+        # Events: str = text chunk, dict = cycle metadata, None = stop
+        self._subscribers: set[asyncio.Queue[Union[str, dict, None]]] = set()
         self._cycle_count = 0
+        self._last_response: str = ""
+        self._last_instruction: Optional[str] = None
+        self._last_inference_frame: Optional[Image.Image] = None
 
     @property
     def mode(self) -> str:
@@ -54,13 +69,63 @@ class MonitorLoop:
         """Set or clear the current instruction.
 
         Setting a new instruction triggers an immediate inference cycle
-        if the model is not currently generating.
+        if the model is not currently generating. Also resets context
+        carry-over since the focus changed.
         """
         old = self._instruction
         self._instruction = instruction
-        if instruction and instruction != old and not self._generating:
-            self._cycle_event.set()
+        if instruction and instruction != old:
+            self._last_response = ""
+            self._last_inference_frame = None
+            if not self._generating:
+                self._cycle_event.set()
         logger.info(f"Instruction {'set' if instruction else 'cleared'}: {instruction}")
+
+    def subscribe(self) -> asyncio.Queue[Union[str, dict, None]]:
+        """Subscribe to output events. Returns a queue that receives:
+
+        - str: text chunk from model
+        - dict: cycle metadata (type="cycle_end", timing, frame IDs)
+        - None: stop signal
+        """
+        q: asyncio.Queue[Union[str, dict, None]] = asyncio.Queue()
+        self._subscribers.add(q)
+        logger.debug(f"Subscriber added (total: {len(self._subscribers)})")
+        return q
+
+    def unsubscribe(self, q: asyncio.Queue) -> None:
+        """Remove a subscriber queue."""
+        self._subscribers.discard(q)
+        logger.debug(f"Subscriber removed (total: {len(self._subscribers)})")
+
+    def _publish(self, item) -> None:
+        """Send an item to all subscribers. Called from the event loop thread."""
+        for q in self._subscribers:
+            q.put_nowait(item)
+
+    def _scene_changed(self, current_frame: Image.Image) -> bool:
+        """Check if the scene changed enough to warrant a new inference cycle."""
+        if self._last_inference_frame is None:
+            return True
+        try:
+            old = np.array(self._last_inference_frame.resize((64, 64)), dtype=np.float32)
+            new = np.array(current_frame.resize((64, 64)), dtype=np.float32)
+            diff = float(np.mean(np.abs(old - new)))
+            logger.debug(f"Scene diff: {diff:.1f} (threshold: {CHANGE_THRESHOLD})")
+            return diff > CHANGE_THRESHOLD
+        except Exception:
+            return True
+
+    def _build_prompt(self, instruction: str) -> str:
+        """Build the full prompt with commentator system message and context."""
+        parts = [COMMENTATOR_PROMPT]
+        if self._last_response and self._last_response.strip() != "...":
+            parts.append(
+                f'\nYour last comment was: "{self._last_response}"\n'
+                "Do not repeat this. Only add new observations."
+            )
+        parts.append(f"\nFocus: {instruction}")
+        return "\n".join(parts)
 
     async def wait_started(self) -> None:
         """Wait until run() is actively looping. Use before set_instruction/stream."""
@@ -93,61 +158,110 @@ class MonitorLoop:
             if self._generating:
                 continue
 
-            frames = self._window.get_frames(FRAMES_PER_INFERENCE)
-            if not frames:
+            frame_metas = self._window.get_frames_with_meta(FRAMES_PER_INFERENCE)
+            if not frame_metas:
                 logger.debug("No frames available, skipping cycle")
                 continue
 
-            await self._run_cycle(frames, self._instruction)
+            # Change detection: skip if scene hasn't changed enough
+            newest_frame = frame_metas[-1].image
+            instruction_changed = self._instruction != self._last_instruction
+            if not instruction_changed and not self._scene_changed(newest_frame):
+                logger.info("Scene unchanged, skipping cycle")
+                continue
+
+            self._last_instruction = self._instruction
+            await self._run_cycle(frame_metas, self._instruction)
 
         self._running = False
         self._started.clear()
         logger.info("Monitor loop stopped")
 
-    async def _run_cycle(self, frames: list, instruction: str) -> None:
+    async def _run_cycle(self, frame_metas: list, instruction: str) -> None:
         """Run one inference cycle in a thread pool."""
         self._generating = True
         self._cycle_count += 1
         cycle_num = self._cycle_count
-        n_frames = len(frames)
+        frame_ids = [m.frame_id for m in frame_metas]
+        frame_timestamps = [m.timestamp for m in frame_metas]
+        images = [m.image for m in frame_metas]
+        prompt = self._build_prompt(instruction)
         label = instruction[:50] + "..." if len(instruction) > 50 else instruction
-        logger.info(f"Cycle {cycle_num}: {n_frames} frames, instruction='{label}'")
+        logger.info(f"Cycle {cycle_num}: {len(images)} frames (#{frame_ids[0]}-#{frame_ids[-1]}), instruction='{label}'")
 
-        t0 = time.monotonic()
+        t0 = time.time()
         try:
             loop = asyncio.get_running_loop()
-            await loop.run_in_executor(
+            full_response = await loop.run_in_executor(
                 None,
                 self._inference_worker,
-                frames,
-                instruction,
+                images,
+                prompt,
                 loop,
+                cycle_num,
+                frame_ids,
+                frame_timestamps,
+                t0,
             )
+            self._last_response = full_response.strip()
+            self._last_inference_frame = images[-1]
         except Exception:
             logger.exception(f"Cycle {cycle_num} failed")
         finally:
-            elapsed = time.monotonic() - t0
+            elapsed = time.time() - t0
             logger.info(f"Cycle {cycle_num} done in {elapsed:.1f}s")
             self._generating = False
 
-    def _inference_worker(self, frames, instruction, loop) -> None:
-        """Runs in thread pool. Streams chunks to the async queue."""
-        for chunk in self._model.infer(frames, instruction, stream=True):
-            loop.call_soon_threadsafe(self._chunks.put_nowait, chunk)
-        loop.call_soon_threadsafe(self._chunks.put_nowait, None)
+    def _inference_worker(self, frames, prompt, loop,
+                          cycle_num, frame_ids, frame_timestamps, t0) -> str:
+        """Runs in thread pool. Streams chunks to all subscribers. Returns full response."""
+        chunks = []
+        for chunk in self._model.infer(frames, prompt, stream=True):
+            chunks.append(chunk)
+            loop.call_soon_threadsafe(self._publish, chunk)
+        full_response = "".join(chunks)
+        t_end = time.time()
+        meta = {
+            "type": "cycle_end",
+            "cycle": cycle_num,
+            "frame_ids": frame_ids,
+            "oldest_frame_at": frame_timestamps[0],
+            "newest_frame_at": frame_timestamps[-1],
+            "inference_start": t0,
+            "inference_end": t_end,
+            "inference_sec": round(t_end - t0, 2),
+            "latency_sec": round(t_end - frame_timestamps[0], 2),
+            "skipped": full_response.strip() == "...",
+        }
+        loop.call_soon_threadsafe(self._publish, meta)
+        return full_response
 
-    async def stream(self) -> AsyncGenerator[Optional[str], None]:
-        """Yield text chunks as they arrive. None marks end of an inference cycle."""
-        while self._running or not self._chunks.empty():
-            try:
-                chunk = await asyncio.wait_for(self._chunks.get(), timeout=1.0)
-                yield chunk
-            except asyncio.TimeoutError:
-                continue
+    async def stream(self) -> AsyncGenerator[Union[str, dict, None], None]:
+        """Yield events as they arrive.
+
+        - str: text chunk from model
+        - dict: cycle metadata (type="cycle_end")
+        - None: stop signal (terminates the generator)
+
+        Each call creates an independent subscriber -- safe for multiple
+        concurrent consumers (SSE connections, WebSocket clients, etc.).
+        """
+        q = self.subscribe()
+        try:
+            while self._running or not q.empty():
+                try:
+                    event = await asyncio.wait_for(q.get(), timeout=1.0)
+                    if event is None:
+                        return
+                    yield event
+                except asyncio.TimeoutError:
+                    continue
+        finally:
+            self.unsubscribe(q)
 
     def stop(self) -> None:
-        """Stop the monitor loop."""
+        """Stop the monitor loop. Must be called from the async context."""
         self._stop_requested = True
         self._running = False
         self._cycle_event.set()
-        self._chunks.put_nowait(None)
+        self._publish(None)

@@ -17,6 +17,7 @@ from app.config import (  # noqa: E402
     MAX_INP_LENGTH,
     MAX_NEW_TOKENS,
     MAX_SLICE_NUMS,
+    SUPPRESS_TOKENS,
 )
 
 logger = logging.getLogger(__name__)
@@ -77,7 +78,7 @@ class ModelServer:
             "max_slice_nums": MAX_SLICE_NUMS,
             "max_inp_length": MAX_INP_LENGTH,
             "max_new_tokens": MAX_NEW_TOKENS,
-            "suppress_tokens": [151667],  # suppress <think> token
+            "suppress_tokens": SUPPRESS_TOKENS,
         }
 
         if stream:

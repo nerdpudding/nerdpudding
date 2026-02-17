@@ -35,17 +35,19 @@ For non-trivial changes, follow this order:
 ```
 .
 ├── AI_INSTRUCTIONS.md                # THIS FILE — read first
-├── README.md                         # Project overview, hardware, use cases
-├── SPRINT1_LOG.md                    # Sprint 1 progress log: setup steps, test results, findings
+├── README.md                         # Project overview, hardware, getting started guide
 ├── roadmap.md                        # Project roadmap and sprint status
-├── todo_feb_17.md                    # Daily task tracker
+├── todo_<date>.md                    # Daily task tracker (when active)
 ├── app/                              # Application code
 │   ├── __init__.py
-│   ├── config.py                     # All configuration (env var overridable)
-│   ├── model_server.py               # Model loading + inference
+│   ├── config.py                     # All configuration (env var overridable, single source of truth)
+│   ├── model_server.py               # Model loading + streaming inference
 │   ├── frame_capture.py              # Background thread capture (OpenCV)
-│   ├── sliding_window.py             # Thread-safe ring buffer (deque, max 16 frames)
-│   ├── monitor_loop.py               # Async orchestrator: IDLE/ACTIVE modes
+│   ├── sliding_window.py             # Thread-safe ring buffer with FrameMeta
+│   ├── monitor_loop.py               # Async orchestrator: IDLE/ACTIVE modes, pub/sub output
+│   ├── main.py                       # FastAPI server (REST + SSE endpoints)
+│   ├── static/
+│   │   └── index.html                # Web UI (vanilla HTML/JS/CSS)
 │   └── requirements.txt              # Python dependencies
 ├── scripts/                          # Standalone utility scripts
 │   ├── test_model.py                 # Model loading + inference test
@@ -60,7 +62,10 @@ For non-trivial changes, follow this order:
 │   └── concept.md                    # Detailed concept: architecture, model selection, constraints
 ├── docs/                             # Guides, tutorials, and reference documentation
 │   ├── model_patches.md              # Patches applied to model files (must reapply after update)
-│   └── lessons_learned.md            # What worked and didn't (context for AI assistants)
+│   ├── lessons_learned.md            # What worked and didn't (context for AI assistants)
+│   └── sprint1/                      # Sprint 1 deliverables
+│       ├── SPRINT1_REVIEW.md         # Sprint summary, findings, Sprint 2 recommendations
+│       └── SPRINT1_LOG.md            # Step-by-step progress log with test results
 ├── MiniCPM-o/                        # Official model repo (cloned, do not modify)
 ├── MiniCPM-V-CookBook/              # Cookbook with demos (cloned, do not modify)
 ├── claude_plans/                     # Active plans (see Plan rules below)
@@ -118,7 +123,7 @@ Never delete files. Always archive.
 
 When resuming after compaction, read in this order:
 1. This file (`AI_INSTRUCTIONS.md`)
-2. Current task tracker if one exists (e.g. `todo_feb_17.md`)
+2. Current task tracker if one exists (check root for a `todo_*.md` file)
 3. Active plans in `claude_plans/`
 4. `concepts/concept.md` for project context
 5. Then continue with the task

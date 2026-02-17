@@ -31,7 +31,7 @@ The downloaded model has a bug: `model.chat(stream=True)` crashes because `chat(
 
 **Fix:** One-line patch in `models/MiniCPM-o-4_5/modeling_minicpmo.py` (after line ~1195).
 
-See [docs/model_patches.md](docs/model_patches.md) for full details and how to verify/reapply.
+See [docs/model_patches.md](../model_patches.md) for full details and how to verify/reapply.
 
 ### HuggingFace cache
 
@@ -155,7 +155,7 @@ The monitor loop is the core orchestrator that ties frame capture, sliding windo
 
 **Key patterns:**
 - `asyncio.Event` for immediate cycle trigger on instruction change
-- `asyncio.Queue` for streaming text chunks to consumers (SSE in Step 6)
+- Pub/sub pattern for streaming text chunks to multiple consumers (SSE, WebSocket, test scripts)
 - `loop.run_in_executor()` for non-blocking model inference (blocking call in thread pool)
 - `loop.call_soon_threadsafe()` to push chunks from inference thread to async queue
 - `None` sentinel in queue marks end of an inference cycle
@@ -191,5 +191,147 @@ Test video: 9.6s animated scene of a cat protesting with police dogs (loops auto
 - Model load: 3.9s (warm, model already cached from previous tests)
 - Frame accumulation: ~7s to buffer 8 frames at 1 FPS before first inference
 - Video file looping works correctly -- capture continued beyond the 9.6s video duration
+
+### Pub/sub refactor
+
+After initial testing, refactored the monitor loop from a single `asyncio.Queue` to a pub/sub pattern (`subscribe()`/`unsubscribe()`/`_publish()`). Each consumer (SSE connection, WebSocket client, test script) gets its own independent queue via `subscribe()`. This makes it trivial to add new transport types later (WebSocket for TTS/STT, etc.) without changing the monitor loop itself.
+
+Retested after refactor -- same behavior, no regressions.
+
+---
+
+## Step 6: FastAPI Server
+
+### Files created
+
+- `app/main.py` -- FastAPI entry point with all endpoints and lifespan management
+
+### Design
+
+Thin HTTP layer over the existing components. The server loads the model on startup via FastAPI's lifespan context manager, then exposes the pipeline through REST endpoints and SSE.
+
+**Endpoints:**
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/` | Serve web UI (static/index.html) or placeholder |
+| GET | `/api/status` | Model loaded? Capture running? Mode? Instruction? Frame count? |
+| POST | `/api/start` | Start capture: `{"source": "test_files/videos/test.mp4"}` |
+| POST | `/api/stop` | Stop capture, clear instruction |
+| POST | `/api/instruction` | Set/change instruction: `{"instruction": "describe what you see"}` |
+| GET | `/api/stream` | SSE endpoint -- each connection gets its own subscriber |
+| GET | `/api/frame` | Latest frame as JPEG (quality 80) |
+
+**Key patterns:**
+- FastAPI lifespan for startup (model load, monitor loop start) and shutdown (cleanup)
+- SSE via `StreamingResponse` with `text/event-stream` -- no extra dependencies
+- Each SSE connection subscribes to the monitor loop's pub/sub independently
+- SSE keepalive comments every 15s to prevent proxy/browser timeout
+- Typed SSE events: `data:` for text chunks, `event: cycle_end` for cycle boundaries
+- Frame endpoint converts PIL Image to JPEG in-memory via `io.BytesIO`
+- Pydantic models for request/response validation
+- Server port: 8199 (configurable via `SERVER_PORT` env var)
+
+### Test result
+
+Tested all endpoints with curl against the running server:
+
+```bash
+python -m app.main  # starts server on port 8199
+```
+
+| Endpoint | Result |
+|----------|--------|
+| `GET /api/status` | JSON response with all fields correct (IDLE, no capture, 0 frames) |
+| `POST /api/start` | Capture started on test video, status updated to capture_running=true |
+| `GET /api/status` (after 3s) | 14 frames buffered, still IDLE (no instruction yet) |
+| `GET /api/frame` | JPEG 1264x720, valid image |
+| `POST /api/instruction` | Instruction set, monitor switched to ACTIVE, inference started |
+| `GET /api/stream` | SSE chunks streaming, 3 full cycles received with `cycle_end` events |
+| `POST /api/stop` | Capture stopped, instruction cleared, back to IDLE |
+
+All endpoints working correctly. SSE streaming delivers text chunks in real-time with proper event formatting.
+
+---
+
+## Step 7: Web UI
+
+### Files created
+
+- `app/static/index.html` -- single-file vanilla HTML/JS/CSS, no build step
+
+### Design
+
+Split-panel layout: video preview on the left (polling `/api/frame`), AI commentary on the right (SSE `/api/stream`). Controls at the bottom: source input, start/stop buttons, instruction input.
+
+**Key features:**
+- Frame polling via `new Image()` at 500ms intervals (avoids broken image flicker)
+- SSE with `EventSource` -- auto-reconnect built in
+- Cycle metadata displayed per commentary block (frame IDs, capture timestamps, inference time, latency)
+- Source input accepts file paths, device IDs, and stream URLs (RTSP, HTTP)
+- Status badge reflects IDLE/ACTIVE mode
+
+### Test result
+
+Opened `http://localhost:8199` in browser. Verified:
+- Video frames appear and update in real-time
+- Start/stop/instruction controls work
+- Commentary streams in with per-cycle metadata
+- Instruction change mid-stream works correctly
+
+---
+
+## Step 8: Integration Test & Optimization
+
+### End-to-end test
+
+Full pipeline tested: server startup → capture start → instruction set → streaming commentary → instruction change → stop.
+
+**Test with short video (9.6s cat scene, looping):**
+- Commentary: short, relevant, non-repeating
+- Inference: ~1.2-2.3s per cycle
+- Latency: ~8.6-9.4s (dominated by 8 frames × 1 FPS = 7s frame age)
+
+**Test with longer video (animated series, multiple scenes):**
+- Model correctly tracked scene changes: characters, actions, setting transitions
+- Commentary stayed focused on new/changed elements
+- Inference: ~1.3-1.7s per cycle
+- Latency: ~8.3-9.0s
+
+### Optimizations applied
+
+**1. Commentator-style prompting:**
+Replaced open-ended "describe what you see" with a system prompt that enforces 1-2 sentence responses, change-only focus, and no repetition. Moved to `config.py` as `COMMENTATOR_PROMPT` for easy customization.
+
+**2. Context carry-over:**
+Previous response is included in the next prompt ("Your last comment was: ...") so the model avoids repeating itself. Reset on instruction change.
+
+**3. Scene change detection:**
+Before each inference cycle, compares the newest frame to the previous cycle's frame using mean pixel difference on 64x64 thumbnails. If below `CHANGE_THRESHOLD` (default 5.0), the cycle is skipped entirely. Saves GPU time on static scenes.
+
+**4. Centralized configuration:**
+All hardcoded values moved to `config.py` with documentation. Every parameter is overridable via environment variable. Single source of truth.
+
+### Latency breakdown
+
+| Component | Time | Notes |
+|-----------|------|-------|
+| Frame age (oldest of 8 at 1 FPS) | ~7s | Reduce with fewer frames or higher FPS |
+| Inference | ~1.3-2.3s | Depends on response length |
+| Cycle interval wait | ~0-5s | Time until next cycle starts |
+| **Total end-to-end** | **~8-11s** | From oldest frame capture to response complete |
+
+### Tuning options (all via env vars, no code changes)
+
+```bash
+# Lower latency: fewer frames, higher capture rate
+FRAMES_PER_INFERENCE=4 CAPTURE_FPS=2 python -m app.main
+
+# Shorter responses
+MAX_NEW_TOKENS=256 python -m app.main
+
+# More aggressive change detection (skip more cycles)
+CHANGE_THRESHOLD=10 python -m app.main
+```
 
 ---

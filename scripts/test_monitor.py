@@ -71,30 +71,33 @@ async def run_test(source, instruction: str, cycles: int):
     print(f"Running {cycles} inference cycle(s)...")
     print(f"{'='*60}\n")
 
-    async for chunk in monitor.stream():
-        if chunk is None:
+    async for event in monitor.stream():
+        if isinstance(event, dict):
             completed += 1
-            elapsed = time.monotonic() - t_start
-            print(f"\n\n--- Cycle {completed}/{cycles} complete ({elapsed:.1f}s) ---\n")
+            meta = event
+            print(f"\n\n--- Cycle {completed}/{cycles} | "
+                  f"Frames #{meta['frame_ids'][0]}-#{meta['frame_ids'][-1]} | "
+                  f"Inference: {meta['inference_sec']}s | "
+                  f"Latency: {meta['latency_sec']}s ---\n")
             if completed >= cycles:
                 break
-            t_start = time.monotonic()
         else:
-            print(chunk, end="", flush=True)
+            print(event, end="", flush=True)
 
     # Test instruction change if we have more than 1 cycle
     if cycles > 1:
-        t_start = time.monotonic()
         new_instruction = "list only the colors you see, nothing else"
         print(f"\n{'='*60}")
         print(f"Testing instruction change: {new_instruction}")
         print(f"{'='*60}\n")
         monitor.set_instruction(new_instruction)
 
-        async for chunk in monitor.stream():
-            if chunk is None:
-                elapsed = time.monotonic() - t_start
-                print(f"\n\n--- Bonus cycle with new instruction ({elapsed:.1f}s) ---\n")
+        async for event in monitor.stream():
+            if isinstance(event, dict):
+                meta = event
+                print(f"\n\n--- Bonus cycle | "
+                      f"Inference: {meta['inference_sec']}s | "
+                      f"Latency: {meta['latency_sec']}s ---\n")
                 break
             else:
                 print(chunk, end="", flush=True)
