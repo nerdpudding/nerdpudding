@@ -13,7 +13,7 @@
 - [x] Step 2: Model server (model loading, streaming inference, test)
 - [x] Step 3: Frame capture (OpenCV, background thread)
 - [x] Step 4: Sliding window (ring buffer)
-- [ ] Step 5: Monitor loop (orchestrator)
+- [x] Step 5: Monitor loop (orchestrator)
 - [ ] Step 6: FastAPI server (endpoints, SSE)
 - [ ] Step 7: Web UI (vanilla HTML/JS)
 - [ ] Step 8: Integration test

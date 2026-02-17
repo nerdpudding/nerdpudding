@@ -137,3 +137,59 @@ Implemented together with Step 3. Simple `collections.deque` with `maxlen=WINDOW
 No separate test needed -- validated as part of the capture test above.
 
 ---
+
+## Step 5: Monitor Loop
+
+### Files created
+
+- `app/monitor_loop.py` -- async orchestrator with IDLE/ACTIVE modes
+- `scripts/test_monitor.py` -- standalone end-to-end test (model + capture + loop)
+
+### Design
+
+The monitor loop is the core orchestrator that ties frame capture, sliding window, and model server together. It runs as an async task and periodically grabs frames from the sliding window to run inference.
+
+**Two modes:**
+- **IDLE** -- frames captured and buffered, no inference (waiting for user instruction)
+- **ACTIVE** -- periodic inference with current instruction every `INFERENCE_INTERVAL` seconds
+
+**Key patterns:**
+- `asyncio.Event` for immediate cycle trigger on instruction change
+- `asyncio.Queue` for streaming text chunks to consumers (SSE in Step 6)
+- `loop.run_in_executor()` for non-blocking model inference (blocking call in thread pool)
+- `loop.call_soon_threadsafe()` to push chunks from inference thread to async queue
+- `None` sentinel in queue marks end of an inference cycle
+- `_started` event + `wait_started()` to synchronize consumers with the loop startup
+
+### Bug found and fixed: async race condition
+
+`asyncio.create_task(monitor.run())` schedules the task but doesn't execute it until the current coroutine yields. This caused two problems:
+1. `stream()` checked `_running` (still `False`) and exited immediately -- no output
+2. `stop()` called before `run()` started, then `run()` overrode `_running` back to `True` -- infinite loop
+
+**Fix:** Added `_started` asyncio.Event that `run()` sets when it begins, and `wait_started()` for consumers to await. Added `_stop_requested` flag to prevent `run()` from starting after `stop()`.
+
+### Test result
+
+```bash
+python -m scripts.test_monitor --source test_files/videos/test.mp4 --cycles 2
+```
+
+Test video: 9.6s animated scene of a cat protesting with police dogs (loops automatically).
+
+| Metric | Cycle 1 | Cycle 2 | Cycle 3 (new instruction) |
+|--------|---------|---------|---------------------------|
+| Instruction | "describe what you see" | "describe what you see" | "list only the colors" |
+| Inference time | 7.5s | 9.3s | 1.7s |
+| Output | Detailed scene description (~200 words) | Different detailed description | "Orange, brown, black, white, yellow, gray" |
+
+**Observations:**
+- Model correctly identified scene contents across 8 frames: cat on crate, "MI-AUW! NOW!" sign, police dogs, urban setting, lighting
+- Each cycle produces different wording for the same scene (non-deterministic with `do_sample=True`)
+- Instruction change works: "list only the colors" gave a 6-word response in 1.7s vs 7-9s for detailed descriptions
+- Short instructions = short answers = fast cycles. This is useful for tuning `INFERENCE_INTERVAL` later
+- Model load: 3.9s (warm, model already cached from previous tests)
+- Frame accumulation: ~7s to buffer 8 frames at 1 FPS before first inference
+- Video file looping works correctly -- capture continued beyond the 9.6s video duration
+
+---

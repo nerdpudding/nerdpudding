@@ -6,6 +6,9 @@
 - [x] Set up development environment (Python 3.12, conda, CUDA 12.6)
 - [x] Download and configure MiniCPM-o 4.5 model (Full BF16, 19 GB)
 - [x] Get model server running locally on RTX 4090 (16.4 GB VRAM, streaming works)
+- [x] Build frame capture layer (OpenCV, background thread, 1 FPS)
+- [x] Build sliding window (ring buffer, 16 frames, thread-safe)
+- [x] Build monitor loop orchestrator (IDLE/ACTIVE modes, async, streaming output)
 - [ ] Get web frontend running (text chat + video display)
 - [ ] Test with webcam input — verify end-to-end: video in, text question, text response
 - [ ] Test with local video file (v4l2loopback or direct feed)
@@ -30,6 +33,6 @@
 
 | Sprint | Status |
 |--------|--------|
-| Sprint 1 | In progress (Step 4 of 8 complete) |
+| Sprint 1 | In progress (Step 5 of 8 complete) |
 | Sprint 2 | Planned |
 | Sprint 3 | Planned |

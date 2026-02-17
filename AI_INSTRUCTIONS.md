@@ -43,13 +43,19 @@ For non-trivial changes, follow this order:
 │   ├── __init__.py
 │   ├── config.py                     # All configuration (env var overridable)
 │   ├── model_server.py               # Model loading + inference
+│   ├── frame_capture.py              # Background thread capture (OpenCV)
+│   ├── sliding_window.py             # Thread-safe ring buffer (deque, max 16 frames)
+│   ├── monitor_loop.py               # Async orchestrator: IDLE/ACTIVE modes
 │   └── requirements.txt              # Python dependencies
 ├── scripts/                          # Standalone utility scripts
-│   └── test_model.py                 # Model loading + inference test
+│   ├── test_model.py                 # Model loading + inference test
+│   ├── test_capture.py               # Frame capture + sliding window test
+│   └── test_monitor.py               # End-to-end monitor loop test
 ├── models/                           # Downloaded model files (git-ignored, ~19 GB)
 │   └── MiniCPM-o-4_5/               # Full BF16 model + patched model code
 ├── test_files/                       # Test assets (images, videos)
-│   └── images/
+│   ├── images/
+│   └── videos/
 ├── concepts/
 │   └── concept.md                    # Detailed concept: architecture, model selection, constraints
 ├── docs/                             # Guides, tutorials, and reference documentation

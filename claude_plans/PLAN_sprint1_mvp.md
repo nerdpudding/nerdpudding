@@ -29,11 +29,11 @@ scripts/
 
 ### Step 1: Environment Setup
 
-Create conda env `video_chat` (Python 3.11), install dependencies.
+Create conda env `video_chat` (Python 3.12), install dependencies.
 
-Dependencies (pinned versions from `MiniCPM-V-CookBook/demo/web_demo/gradio/server/requirements.txt`):
+Dependencies (actual versions used -- see SPRINT1_LOG.md for rationale):
 - `torch==2.7.1`, `torchvision==0.22.1` (CUDA 12.x)
-- `transformers==4.55.0`, `accelerate==1.9.0`
+- `transformers==4.51.0`, `accelerate==1.9.0` (4.51.0 matches model's config.json, not CookBook's 4.55.0)
 - `fastapi==0.116.1`, `uvicorn==0.35.0`
 - `opencv-python-headless` (frame capture)
 - `pillow==11.3.0`, `numpy==2.2.6`
