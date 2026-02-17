@@ -53,8 +53,9 @@ For non-trivial changes, follow this order:
 │   ├── test_model.py                 # Model loading + inference test
 │   ├── test_capture.py               # Frame capture + sliding window test
 │   └── test_monitor.py               # End-to-end monitor loop test
-├── models/                           # Downloaded model files (git-ignored, ~19 GB)
-│   └── MiniCPM-o-4_5/               # Full BF16 model + patched model code
+├── models/                           # Downloaded model files (git-ignored)
+│   ├── MiniCPM-o-4_5/               # Full BF16 model + patched model code (~19 GB)
+│   └── MiniCPM-o-4_5-awq/           # AWQ INT4 model + patched config + code (~8 GB)
 ├── test_files/                       # Test assets (images, videos)
 │   ├── images/
 │   └── videos/
@@ -63,9 +64,11 @@ For non-trivial changes, follow this order:
 ├── docs/                             # Guides, tutorials, and reference documentation
 │   ├── model_patches.md              # Patches applied to model files (must reapply after update)
 │   ├── lessons_learned.md            # What worked and didn't (context for AI assistants)
-│   └── sprint1/                      # Sprint 1 deliverables
-│       ├── SPRINT1_REVIEW.md         # Sprint summary, findings, Sprint 2 recommendations
-│       └── SPRINT1_LOG.md            # Step-by-step progress log with test results
+│   ├── sprint1/                      # Sprint 1 deliverables
+│   │   ├── SPRINT1_REVIEW.md         # Sprint summary, findings, Sprint 2 recommendations
+│   │   └── SPRINT1_LOG.md            # Step-by-step progress log with test results
+│   └── sprint2/                      # Sprint 2 deliverables
+│       └── SPRINT2_LOG.md            # Step-by-step progress log
 ├── MiniCPM-o/                        # Official model repo (cloned, do not modify)
 ├── MiniCPM-V-CookBook/              # Cookbook with demos (cloned, do not modify)
 ├── claude_plans/                     # Active plans (see Plan rules below)

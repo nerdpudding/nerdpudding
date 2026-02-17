@@ -5,6 +5,7 @@ triton==3.3.1
 
 # Model
 transformers==4.51.0
+autoawq @ git+https://github.com/tc-mb/AutoAWQ.git
 librosa
 soundfile
 accelerate==1.9.0

@@ -41,3 +41,47 @@ Should show the patch comment around line 1196-1199.
 When building a Docker image, either:
 - Apply this patch in the Dockerfile after copying the model files
 - Or include the patched file in the image build context
+
+## 2. AWQ config fix: modules_to_not_convert
+
+**File:** `models/MiniCPM-o-4_5-awq/config.json`
+**Section:** `quantization_config`
+**Model version:** `openbmb/MiniCPM-o-4_5-awq` downloaded 2026-02-17
+
+### Problem
+
+The published AWQ model has `"modules_to_not_convert": null` in `config.json`. This causes `AutoModel.from_pretrained()` to try to AWQ-quantize ALL linear layers, including the vision encoder (SiglipVisionTransformer) whose `intermediate_size: 4304` is not divisible by the AWQ `group_size: 128`. This crashes with `AssertionError: self.in_features % self.group_size == 0`.
+
+In reality, only the LLM layers (`llm.model.layers.*`) are quantized in the safetensor files. Vision, audio, TTS, and embedding layers are stored as regular float weights.
+
+### Fix
+
+Changed `modules_to_not_convert` from `null` to the list of modules that should NOT be AWQ-converted:
+
+```json
+"modules_to_not_convert": ["vpm", "resampler", "apm", "audio_projection_layer", "audio_avg_pooler", "tts", "llm.model.embed_tokens", "llm.lm_head", "llm.model.norm"]
+```
+
+### How to verify the patch is applied
+
+```bash
+grep "modules_to_not_convert" models/MiniCPM-o-4_5-awq/config.json
+```
+
+Should show the list of modules, NOT `null`.
+
+## 3. AWQ streaming fix in chat() method
+
+**File:** `models/MiniCPM-o-4_5-awq/modeling_minicpmo.py`
+**Line:** ~1198 (after `self.generate()` call, before TTS post-processing)
+**Model version:** `openbmb/MiniCPM-o-4_5-awq` downloaded 2026-02-17
+
+Same bug as patch #1, same fix. The AWQ model ships with the same unpatched `modeling_minicpmo.py`.
+
+### How to verify the patch is applied
+
+```bash
+grep -n "PATCH: chat" models/MiniCPM-o-4_5-awq/modeling_minicpmo.py
+```
+
+Should show the patch comment around line 1198-1201.

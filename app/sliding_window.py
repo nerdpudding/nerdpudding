@@ -39,26 +39,36 @@ class SlidingWindow:
                 FrameMeta(self._frame_counter, time.time(), frame)
             )
 
-    def get_frames(self, n: Optional[int] = None) -> list[Image.Image]:
+    def get_frames(
+        self, n: Optional[int] = None, stride: int = 1
+    ) -> list[Image.Image]:
         """Return the last n frames (images only, backward compatible).
 
         Args:
             n: Number of frames to return. None returns all available frames.
+            stride: Take every Nth frame from the tail. stride=2 with n=4
+                    returns 4 frames spanning 8 buffer positions.
         """
-        with self._lock:
-            items = list(self._buffer)
-        if n is not None:
-            items = items[-n:]
-        return [m.image for m in items]
+        return [m.image for m in self.get_frames_with_meta(n, stride)]
 
-    def get_frames_with_meta(self, n: Optional[int] = None) -> list[FrameMeta]:
+    def get_frames_with_meta(
+        self, n: Optional[int] = None, stride: int = 1
+    ) -> list[FrameMeta]:
         """Return the last n frames with metadata (frame_id, timestamp, image).
 
         Args:
             n: Number of frames to return. None returns all available frames.
+            stride: Take every Nth frame from the tail of the buffer.
+                    stride=1 means consecutive (default, backward compatible).
+                    stride=2 means every other frame, etc.
+                    If fewer frames are available than n*stride, returns what's
+                    available with the given stride.
         """
         with self._lock:
             items = list(self._buffer)
+        if stride > 1:
+            # Take every stride-th frame from the end
+            items = items[::-1][::stride][::-1]
         if n is not None:
             items = items[-n:]
         return items

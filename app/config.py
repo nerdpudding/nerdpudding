@@ -20,9 +20,9 @@ CUDA_VISIBLE_DEVICES = os.getenv("CUDA_VISIBLE_DEVICES", "0")
 # ---------------------------------------------------------------------------
 # Model
 # ---------------------------------------------------------------------------
-# Path to the model directory. Default: full BF16 (~19 GB).
-# For lower VRAM GPUs, consider GGUF quantized variants.
-MODEL_PATH = os.getenv("MODEL_PATH", "models/MiniCPM-o-4_5")
+# Path to the model directory. Default: AWQ INT4 (~7 GB VRAM).
+# For full precision, use MODEL_PATH=models/MiniCPM-o-4_5 (BF16, ~16 GB VRAM).
+MODEL_PATH = os.getenv("MODEL_PATH", "models/MiniCPM-o-4_5-awq")
 
 # Token IDs to suppress during generation. 151667 = <think> token.
 # Comma-separated list of ints.
@@ -50,9 +50,9 @@ MAX_INP_LENGTH = int(os.getenv("MAX_INP_LENGTH", "4352"))
 # Frame capture
 # ---------------------------------------------------------------------------
 # How many frames per second to capture from the video source.
-# 1.0 = one frame per second. Higher = more temporal resolution but
-# more data in the sliding window.
-CAPTURE_FPS = float(os.getenv("CAPTURE_FPS", "1.0"))
+# Higher = more temporal resolution and tighter frame spacing.
+# At 2.0 FPS with FRAME_STRIDE=2, inference frames are 1s apart.
+CAPTURE_FPS = float(os.getenv("CAPTURE_FPS", "2.0"))
 
 # ---------------------------------------------------------------------------
 # Sliding window
@@ -63,15 +63,22 @@ WINDOW_SIZE = int(os.getenv("WINDOW_SIZE", "16"))
 # How many recent frames to send per inference cycle.
 # More frames = more temporal context but slower inference and more VRAM.
 # Token cost per cycle = FRAMES_PER_INFERENCE * 64 * MAX_SLICE_NUMS.
-# Reduce to 4 for lower latency or limited VRAM.
-FRAMES_PER_INFERENCE = int(os.getenv("FRAMES_PER_INFERENCE", "8"))
+FRAMES_PER_INFERENCE = int(os.getenv("FRAMES_PER_INFERENCE", "4"))
+
+# Frame stride: take every Nth frame from the buffer instead of consecutive.
+# With CAPTURE_FPS=2 and FRAME_STRIDE=2, 4 frames span 4 seconds (every other
+# frame at 0.5s intervals). Stride=1 means consecutive (no skipping).
+# Higher stride = more temporal coverage per frame set, at the cost of
+# missing short-lived events between sampled frames.
+FRAME_STRIDE = int(os.getenv("FRAME_STRIDE", "2"))
 
 # ---------------------------------------------------------------------------
 # Monitor loop
 # ---------------------------------------------------------------------------
-# Seconds between inference cycles. Set based on expected response length
-# and TTS playback time. 5.0 works well for 1-2 sentence commentary.
-INFERENCE_INTERVAL = float(os.getenv("INFERENCE_INTERVAL", "5.0"))
+# Seconds between inference cycles. Keep low to minimize idle time between
+# cycles. The actual cycle rate is limited by inference speed (~2s), so
+# this is just the minimum pause. Set higher for less frequent commentary.
+INFERENCE_INTERVAL = float(os.getenv("INFERENCE_INTERVAL", "1.0"))
 
 # Mean pixel difference threshold (0-255) for scene change detection.
 # Below this = scene unchanged, cycle is skipped. 0 = never skip.

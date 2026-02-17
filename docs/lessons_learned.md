@@ -77,3 +77,23 @@ Ongoing log of what worked and what didn't during development. Primarily intende
 **Rule:** When capturing from video files at a lower rate than the source FPS, use `grab()` to skip intermediate frames. Only call `retrieve()`/`read()` on the frame you actually want.
 
 ---
+
+## AWQ models may ship with broken quantization configs
+
+**Lesson:** Pre-quantized AWQ models from HuggingFace may have `"modules_to_not_convert": null` in `config.json`, even though only a subset of layers were actually quantized. This causes `AutoModel.from_pretrained()` to try to AWQ-convert all linear layers, crashing on layers whose dimensions aren't divisible by the AWQ group size.
+
+**Example (Sprint 2, Step 1):** The `openbmb/MiniCPM-o-4_5-awq` model's `config.json` had `"modules_to_not_convert": null`. Only the LLM layers were quantized (verified via safetensor weight inspection), but the vision encoder's `intermediate_size: 4304` is not divisible by `group_size: 128`, causing `AssertionError` during loading. The CookBook documentation recommends using `AutoAWQForCausalLM.from_quantized()` from a forked AutoAWQ library, which handles this internally. Alternatively, patching `config.json` with the correct `modules_to_not_convert` list fixes it for `AutoModel.from_pretrained()`.
+
+**Rule:** When loading AWQ models, always check if `modules_to_not_convert` is set correctly in `config.json`. If null, inspect the safetensor index to determine which modules were actually quantized, and set the list manually. Also clear the HF cache (`models/.hf_cache/modules/`) after patching model code, or the stale cached version gets loaded.
+
+---
+
+## Clear HF cache after patching model code
+
+**Lesson:** When using `trust_remote_code=True`, transformers caches the model's Python files in `HF_HOME/modules/transformers_modules/<model_name>/`. If you patch the model's `.py` files in the `models/` directory, the cached (unpatched) version may still be loaded.
+
+**Example (Sprint 2, Step 1):** After patching `models/MiniCPM-o-4_5-awq/modeling_minicpmo.py` for the streaming fix, the test still crashed because transformers loaded the cached unpatched version from `models/.hf_cache/modules/transformers_modules/MiniCPM-o-4_5-awq/`.
+
+**Rule:** After patching any model `.py` file, always delete the corresponding cache directory: `rm -rf models/.hf_cache/modules/transformers_modules/<model_name>/`. The cache will be rebuilt from the patched source on next load.
+
+---

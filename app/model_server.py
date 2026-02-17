@@ -37,14 +37,19 @@ class ModelServer:
         config.init_tts = False
         config.init_vision = True
 
+        is_awq = hasattr(config, "quantization_config")
+        dtype = torch.float16 if is_awq else torch.bfloat16
+        logger.info(f"Model type: {'AWQ INT4' if is_awq else 'BF16'}, dtype: {dtype}")
+
         self.model = AutoModel.from_pretrained(
             model_path,
             config=config,
             trust_remote_code=True,
             attn_implementation="sdpa",
-            torch_dtype=torch.bfloat16,
+            torch_dtype=dtype,
         )
         self.model.eval().cuda()
+        self.is_awq = is_awq
 
         self.tokenizer = AutoTokenizer.from_pretrained(
             model_path, trust_remote_code=True

@@ -49,6 +49,56 @@ dtype = torch.float16 if is_awq else torch.bfloat16
 - Check VRAM (expect ~11 GB), compare output quality to BF16
 - Verify BF16 still works: `MODEL_PATH=models/MiniCPM-o-4_5 python -m scripts.test_model --image test_files/images/test.jpg`
 
+**Actual results (Step 1 complete)**:
+- VRAM (nvidia-smi): ~8.6 GB (AWQ) vs ~18.5 GB (BF16) — 54% reduction
+- Inference speed: comparable to BF16, NOT faster (vision encoder dominates, runs unquantized)
+- Quality: no noticeable degradation
+- Required config.json patch (modules_to_not_convert bug) and streaming patch — see docs/model_patches.md
+
+---
+
+## Step 1b: Latency Optimization (Frame Striding + Tuning)
+
+**Goal**: Reduce end-to-end latency from ~10s to ~4s without losing temporal context.
+
+**Why now**: AWQ didn't improve inference speed. Testing revealed the bottleneck is the frame capture window (8 frames × 1 FPS = 8 seconds), not inference (~2s). The INFERENCE_INTERVAL (5s idle wait) adds further delay.
+
+**Analysis of latency**:
+```
+Current cycle (FRAMES_PER_INFERENCE=8, CAPTURE_FPS=1, INFERENCE_INTERVAL=5):
+  Frame window:     8.0s  (8 consecutive frames, 1 apart)
+  Inference:        2.0s  (AWQ or BF16, similar)
+  Idle wait:        5.0s  (INFERENCE_INTERVAL, pure waste between cycles)
+  End-to-end:      ~10s
+```
+
+**Three improvements**:
+
+1. **Frame striding** (new feature): Instead of N consecutive frames, take every Kth frame from the buffer. With `FRAME_STRIDE=2`, 4 frames span 8 seconds instead of 4 seconds — same temporal coverage, half the image tokens.
+
+2. **Lower INFERENCE_INTERVAL**: From 5.0s to 1.0s. Inference already takes ~2s, no need for extra 5s idle.
+
+3. **Updated defaults**: `FRAMES_PER_INFERENCE=4`, `CAPTURE_FPS=2`, `FRAME_STRIDE=2`, `INFERENCE_INTERVAL=1.0`
+
+**Files**:
+- `app/config.py` -- Add `FRAME_STRIDE`, update defaults
+- `app/sliding_window.py` -- Add stride parameter to `get_frames()` and `get_frames_with_meta()`
+- `app/monitor_loop.py` -- Pass stride when reading frames
+
+**Expected result**:
+```
+After (FRAMES_PER_INFERENCE=4, CAPTURE_FPS=2, FRAME_STRIDE=2, INFERENCE_INTERVAL=1):
+  Frame window:     4.0s  (4 frames, every 2nd, spanning 4s at 2 FPS)
+  Inference:        ~1.5s (fewer image tokens)
+  Idle wait:        1.0s
+  End-to-end:      ~4-5s
+```
+
+**Verification**:
+- Run with defaults, compare cycle latency to Sprint 1 baseline
+- Verify commentary quality with fewer frames (should still be coherent)
+- Test with various stride values (1, 2, 3) for quality vs speed tradeoff
+
 ---
 
 ## Step 2: MJPEG Streaming (Quick UI Win)

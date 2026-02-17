@@ -2,7 +2,8 @@
 
 ## Sprint 2 Implementation
 
-- [ ] Step 1: AWQ model support (download, auto-detect, test VRAM + quality)
+- [x] Step 1: AWQ model support (download, auto-detect, test VRAM + quality)
+- [x] Step 1b: Latency optimization (frame striding, tuned defaults)
 - [ ] Step 2: MJPEG streaming endpoint (smooth video in UI)
 - [ ] Step 3: TTS integration (streaming_prefill/generate, InferenceResult, test audio)
 - [ ] Step 4: Audio delivery pipeline (AudioManager, resampling, /api/audio-stream)

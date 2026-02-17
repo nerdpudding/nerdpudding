@@ -9,6 +9,7 @@ from PIL import Image
 from app.config import (
     CHANGE_THRESHOLD,
     COMMENTATOR_PROMPT,
+    FRAME_STRIDE,
     FRAMES_PER_INFERENCE,
     INFERENCE_INTERVAL,
 )
@@ -158,7 +159,7 @@ class MonitorLoop:
             if self._generating:
                 continue
 
-            frame_metas = self._window.get_frames_with_meta(FRAMES_PER_INFERENCE)
+            frame_metas = self._window.get_frames_with_meta(FRAMES_PER_INFERENCE, stride=FRAME_STRIDE)
             if not frame_metas:
                 logger.debug("No frames available, skipping cycle")
                 continue
