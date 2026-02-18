@@ -1,9 +1,12 @@
 # Video Chat with AI
 
-Local, GPU-accelerated application for real-time video conversation with a multimodal AI model.
+Local, GPU-accelerated application that streams live video into a multimodal AI model for real-time commentary with text-to-speech. Point it at a football match, a security camera, a nature stream, or any video source — and get a live AI commentator that sees, understands, and speaks about what's happening.
+
+**Status:** Experimental. Core pipeline works end-to-end (video in, text + audio out). TTS pacing, Docker, and WebRTC are in active development. See [Roadmap](#current-status) for details.
 
 ## Table of Contents
 
+- [Demo: Live Sports Commentary](#demo-live-sports-commentary)
 - [Getting Started](#getting-started)
 - [Goal](#goal)
 - [Architecture Overview](#architecture-overview)
@@ -15,14 +18,44 @@ Local, GPU-accelerated application for real-time video conversation with a multi
 - [Project Structure & Agents](#project-structure--agents)
 - [Documentation](#documentation)
 
+## Demo: Live Sports Commentary
+
+The most fun way to try this: download a football match (or any sports broadcast) and let the AI commentate live — with voice.
+
+```bash
+# Start with TTS enabled
+ENABLE_TTS=true python -m app.main
+```
+
+Open `http://localhost:8199` in your browser, enter the path to a video file, click **Start**, and set the instruction:
+
+```
+Commentate on this football match between Brazil (BRA) and France (FRA).
+The scoreboard shows country abbreviations, the score, and the match clock
+— the clock is NOT the score. Focus on exciting moments: attacks, shots,
+saves, fouls, corners, and near-misses. Build tension during dangerous plays.
+Be enthusiastic about goal chances, not monotone. Skip boring buildup in
+midfield — only speak when something interesting happens.
+```
+
+Adapt the team names and context to your match. The AI will commentate with natural pacing — more during action, quieter during slow moments. Use the speaker button in the header to mute/unmute.
+
+Video sources: local files, webcam (device ID `0`), RTSP streams (`rtsp://...`), or any OpenCV-compatible source.
+
 ## Getting Started
 
 ### Prerequisites
 
-- NVIDIA GPU with ~10 GB VRAM (tested on RTX 4090, ~8.6 GB used with default AWQ model; BF16 fallback needs ~18.5 GB)
+- NVIDIA GPU with sufficient VRAM (see table below)
 - CUDA 12.x installed
 - Miniconda or Anaconda
 - ~10 GB disk space for AWQ model + TTS assets (~30 GB if also downloading BF16)
+
+| Mode | VRAM Required | Tested On |
+|------|--------------|-----------|
+| Text-only (AWQ) | ~8.6 GB | RTX 4090 |
+| Text + TTS (AWQ) | ~14-15 GB | RTX 4090 |
+| Text-only (BF16) | ~18.5 GB | RTX 4090 |
 
 ### Quick Start
 
@@ -44,7 +77,6 @@ huggingface-cli download openbmb/MiniCPM-o-4_5-awq --local-dir models/MiniCPM-o-
 
 # 3. Download TTS assets (~1.2 GB vocoder + reference audio)
 #    The AWQ model needs these from the BF16 model's assets directory.
-#    Download BF16 model and copy assets, or download assets only:
 huggingface-cli download openbmb/MiniCPM-o-4_5 --local-dir models/MiniCPM-o-4_5 --include "assets/*"
 cp -r models/MiniCPM-o-4_5/assets models/MiniCPM-o-4_5-awq/assets
 
@@ -55,17 +87,16 @@ cp -r models/MiniCPM-o-4_5/assets models/MiniCPM-o-4_5-awq/assets
 #    AWQ model needs config.json fix + streaming fix in modeling_minicpmo.py
 #    BF16 model (if downloaded) needs streaming fix in modeling_minicpmo.py
 
-# 5. Start the server
+# 5. Start the server (text-only)
 python -m app.main
-# Server starts on http://localhost:8199
 
-# 6. Open browser to http://localhost:8199
-#    - Enter a video source (file path, device ID, or stream URL)
-#    - Click Start — smooth video plays at native frame rate (MJPEG)
-#    - Type an instruction (e.g. "describe what you see") and press Send
-#    - AI commentary streams in the right panel, synced with the video
-#    - Video is shown with a ~5s adaptive delay that matches commentary timing
+# Or with TTS audio commentary
+ENABLE_TTS=true python -m app.main
+
+# Server starts on http://localhost:8199
 ```
+
+Open the browser, enter a video source, click **Start**, type an instruction, and press **Send**. The AI commentary streams as text in the right panel. With TTS enabled, you'll also hear it — use the speaker button to mute/unmute.
 
 ### Testing Without a Browser
 
@@ -78,21 +109,26 @@ python -m scripts.test_capture --source test_files/videos/test.mp4
 
 # Test full pipeline (model + capture + commentary loop)
 python -m scripts.test_monitor --source test_files/videos/test.mp4 --cycles 2
+
+# Test TTS audio output (saves WAV file)
+ENABLE_TTS=true python -m scripts.test_tts --source test_files/videos/test.mp4
 ```
 
 ### Configuration
 
-All settings are in `app/config.py` and overridable via environment variables:
+All settings are in `app/config.py` and overridable via environment variables. For detailed tuning instructions — including per-GPU recommendations, TTS pacing, scene detection, and prompt tips — see the **[Tuning Guide](docs/tuning_guide.md)**.
+
+Quick examples:
 
 ```bash
+# Enable TTS with custom pacing
+ENABLE_TTS=true TTS_PAUSE_AFTER=1.5 python -m app.main
+
 # Use BF16 model instead of AWQ (needs ~18.5 GB VRAM)
 MODEL_PATH=models/MiniCPM-o-4_5 python -m app.main
 
 # Disable video-commentary sync (show real-time video, no delay)
 STREAM_DELAY_INIT=0 python -m app.main
-
-# Shorter responses
-MAX_NEW_TOKENS=256 python -m app.main
 
 # Different GPU
 CUDA_VISIBLE_DEVICES=1 python -m app.main
@@ -168,24 +204,27 @@ See the [Project hierarchy](AI_INSTRUCTIONS.md#project-hierarchy) in AI_INSTRUCT
 
 ## Current Status
 
-**PoC milestone reached (Sprint 2, Step 2).** Smooth native-rate video with real-time AI commentary, adaptively synced, on consumer GPU hardware. Sprint 2 continues with TTS, LiveKit, and Docker (Steps 3-8). See [Sprint 2 Plan](claude_plans/PLAN_sprint2.md) for details. Git tag: `poc-milestone`.
+**Sprint 2 in progress.** Steps 1-4 complete (AWQ, latency, MJPEG sync, TTS + audio pacing). Docker and LiveKit are next. The core pipeline works end-to-end: video in, text + TTS audio out, with adaptive pacing and scene-weighted commentary density. See [Sprint 2 Plan](claude_plans/PLAN_sprint2.md) for details.
 
-| Metric | Value |
-|--------|-------|
-| Model VRAM (AWQ INT4) | ~8.6 GB |
-| Inference per cycle | ~1.6s avg |
-| End-to-end latency | ~4.8s avg (adaptively synced) |
-| Display frame rate | Native (~24 FPS via MJPEG) |
-| Inference capture rate | 2 FPS |
+| Metric | Text-only | With TTS |
+|--------|-----------|----------|
+| VRAM (AWQ INT4) | ~8.6 GB | ~14-15 GB |
+| Inference per cycle | ~1.6s avg | ~5s avg |
+| End-to-end latency | ~4.8s avg | Audio-gated (adaptive) |
+| Display frame rate | Native (~24 FPS via MJPEG) | Same |
+| Commentary output | Streaming text (SSE) | Text + audio (Web Audio API) |
+
+Remaining Sprint 2 work: Docker setup, LiveKit WebRTC, input robustness, UI polish.
 
 ## Documentation
 
+- [Tuning Guide](docs/tuning_guide.md) -- per-GPU settings, TTS pacing, prompt tips
 - [AI Instructions](AI_INSTRUCTIONS.md) -- project rules, hierarchy, agent table
 - [Detailed Concept](concepts/concept.md) -- full concept with diagrams and technical details
 - [Roadmap](roadmap.md) -- project roadmap and sprint status
 - [Sprint 1 Review](docs/sprint1/SPRINT1_REVIEW.md) -- sprint summary, findings, Sprint 2 ideas
 - [Sprint 1 Log](docs/sprint1/SPRINT1_LOG.md) -- setup steps, test results, findings
-- [Sprint 2 Log](docs/sprint2/SPRINT2_LOG.md) -- AWQ, latency optimization, MJPEG adaptive sync
+- [Sprint 2 Log](docs/sprint2/SPRINT2_LOG.md) -- AWQ, latency, MJPEG sync, TTS, audio pacing
 - [Model Patches](docs/model_patches.md) -- patches applied to model files (must reapply after update)
 - [Lessons Learned](docs/lessons_learned.md) -- what worked and didn't (context for AI assistants)
 - [docs/](docs/) -- all guides and reference documentation

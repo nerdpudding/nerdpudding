@@ -1,13 +1,11 @@
 # Tasks - February 19, 2026
 
-## Priority 1: Audio-commentary pacing (awaiting approval)
+## Completed today
 
-Plan: `claude_plans/PLAN_audio_pacing.md` — submitted for review.
-
-- [ ] Step A: Audio-gated pacing (fixes drift)
-- [ ] Step B: Inter-cycle breathing pause
-- [ ] Step C: MAX_NEW_TOKENS cap for TTS mode
-- [ ] Step D: Scene-weighted commentary length
+- [x] Audio-commentary pacing (Steps A-D per PLAN_audio_pacing.md)
+- [x] "..." audio suppression fix (Chinese TTS artifact)
+- [x] Tuning guide (docs/tuning_guide.md)
+- [x] README overhaul (demo section, VRAM table, tuning guide reference)
 
 ## Sprint 2 remaining steps
 

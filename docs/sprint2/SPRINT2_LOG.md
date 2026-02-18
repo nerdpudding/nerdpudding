@@ -379,17 +379,57 @@ Tested with `ENABLE_TTS=true`, video file, commentator prompt:
 - **Mute/unmute works**: speaker button toggles audio stream on/off
 - **TTS disabled mode**: speaker button hidden, everything works as before
 
-### Known issue: audio-commentary timing
+### Resolved: audio-commentary timing
 
-With TTS enabled, the timing between cycles doesn't feel right. Text commentary can fire rapid short cycles, but audio takes longer to generate and play back. The audio can mostly keep up, but the pacing feels off — cycles come too fast for the audio to finish naturally.
+Initially, the timing between cycles was off — audio queued up and drifted behind real-time. This was resolved by the audio pacing implementation (see Step 4b below).
 
-**Potential solutions to explore:**
-- Adjust COMMENTATOR_PROMPT for shorter responses when TTS is active (fewer words = shorter audio)
-- Increase INFERENCE_INTERVAL when TTS is enabled (give audio time to play before next cycle)
-- Add a pause/cooldown after audio finishes before starting next inference
-- Dynamic timing: monitor audio queue depth, delay next cycle until audio buffer drains
-- Different approach: batch multiple short text cycles into one audio output
+---
 
-This is a UX/tuning problem, not a bug. The pipeline works correctly — the pacing just needs optimization for the audio modality.
+## Step 4b: Audio-Commentary Pacing
+
+### Problem
+
+Step 4's live test revealed three issues:
+1. **Queue buildup (drift)**: Each cycle produced ~7s audio per ~6s real time, causing ~1s/cycle drift
+2. **Uniform density**: Same commentary length regardless of scene activity
+3. **No breathing room**: Cycles transitioned immediately with no pause
+4. **Chinese audio on "..."**: Token2wav vocoder produced Chinese speech artifacts when the model output the skip signal "..."
+
+### Implementation (per PLAN_audio_pacing.md)
+
+**Step A — Audio-gated pacing:** AudioManager tracks `first_publish_time` + cumulative `audio_seconds`. MonitorLoop waits until `estimated_playback_end` before starting next cycle. Drift is eliminated by design.
+
+**Step B — Breathing pause:** `TTS_PAUSE_AFTER` (default 1.0s) added after audio gate. Combined into a single wait: `remaining_audio + pause`. Configurable, 0 = no pause.
+
+**Step C — Token cap:** `TTS_MAX_NEW_TOKENS` (default 150) limits TTS response length. ~2-3 sentences, ~8-12s audio. Prevents runaway 30s+ responses.
+
+**Step D — Scene-weighted density:** `_scene_changed()` refactored to `_scene_diff()` returning a float score. New `_commentary_intensity()` uses dual-signal heuristic (pixel diff + previous response length) to vary prompt hints: minimal / brief / normal.
+
+**"..." audio fix:** Audio chunks are buffered until accumulated text exceeds 5 chars. If the response turns out to be "...", the buffer is discarded (no audio published). Real responses flush the buffer and switch to real-time streaming with minimal delay.
+
+### Code changes
+
+- `app/audio_manager.py` — Clock tracking: `first_publish_time`, `audio_seconds`, `estimated_playback_end`, `reset_clock()`
+- `app/monitor_loop.py` — Audio gate + pause after `_run_cycle()`, `_scene_diff()`, `_commentary_intensity()`, prompt hints, "..." audio suppression buffer
+- `app/config.py` — Added `TTS_PAUSE_AFTER` (1.0), `TTS_MAX_NEW_TOKENS` (150)
+- `app/model_server.py` — Uses `TTS_MAX_NEW_TOKENS` in `infer_with_audio()`
+
+### Test results
+
+Tested with full football match (Brazil vs France), `ENABLE_TTS=true`:
+- **Drift**: None observed over extended playback. Audio gate holds sync.
+- **Pacing**: Natural rhythm — more commentary during action, quieter during slow buildup.
+- **Breathing pause**: Audible silence between observations. Feels natural.
+- **"..." suppression**: No more Chinese audio artifacts during quiet moments.
+- **Scoreboard reading**: Model reads match clock and score. Sometimes reads the time at end of a sentence, which by playback is a few seconds behind — cosmetic only, prompting can mitigate.
+
+### Config
+
+| Setting | Default | Purpose |
+|---------|---------|---------|
+| `TTS_PAUSE_AFTER` | 1.0 | Seconds of silence after audio before next cycle |
+| `TTS_MAX_NEW_TOKENS` | 150 | Max tokens per TTS inference (shorter = shorter audio) |
+
+See [Tuning Guide](../tuning_guide.md) for per-GPU recommendations and prompt tips.
 
 ---
