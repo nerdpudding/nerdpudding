@@ -161,8 +161,6 @@ Both versions tested. Neither works. PyTorch SDPA flash is the best backend.
 The monkey-patch code in model_server.py stays (graceful try/except fallback)
 in case future SageAttention versions fix compatibility. No action needed.
 
-## Future performance options (not SageAttention)
+## Future performance options
 
-- vLLM or SGLang inference backend (MiniCPM-o supports both)
-- GGUF via llama.cpp
-- Shorter output via prompt engineering
+See roadmap.md Sprint 4: SGLang and TensorRT-LLM are tracked there.

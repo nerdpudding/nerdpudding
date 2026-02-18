@@ -180,3 +180,53 @@ Incompatible with this model. Both v1 and v2 ruled out.
 
 SageAttention (v1 and v2) does not work with MiniCPM-o 4.5 AWQ on RTX 4090.
 PyTorch SDPA flash remains the best attention backend for this setup.
+
+---
+
+## Test 5: Flash Attention 2 (Dao-AILab) (2026-02-18)
+
+**Combo:** Sniper tuned (same as test 3) + flash-attn 2.8.3 (compiled from source)
+**Settings:** SLICE=2, 4 frames/cycle, stride=1, 5 FPS capture, CHANGE_THRESHOLD=0
+**Image tokens/cycle:** 4 * 128 = 512
+**Attention:** Flash Attention 2 via `attn_implementation="flash_attention_2"`
+**Source:** HTTP MJPEG webcam stream (localhost:8088), default commentator profile
+**TTS:** enabled
+
+### Results (10 cycles, #7-#16)
+
+| Metric | Min | Max | Typical |
+|--------|-----|-----|---------|
+| Inference time | 2.16s | 5.13s | 2.9-4.9s |
+| Latency | 3.12s | 5.91s | 3.8-5.7s |
+| Sync delay (EMA) | 4.19s | 4.64s | ~4.4s |
+
+### Comparison with baseline (test 3, SDPA flash)
+
+| | SDPA flash | Flash Attention 2 |
+|--|---|---|
+| Skip ("...") | 1.4-2.9s | 2.2-2.4s |
+| Real responses | 2.6-5.1s | 2.9-5.1s |
+| Typical | 2.5-4.2s | 2.9-4.9s |
+
+### Verdict: No measurable difference
+
+Flash Attention 2 performs identically to PyTorch SDPA flash on this workload.
+Uninstalled — no benefit, one less dependency.
+
+---
+
+## Final conclusion: Attention optimization (2026-02-18)
+
+Tested three attention backends against PyTorch SDPA flash baseline:
+
+| Backend | Result |
+|---------|--------|
+| SageAttention v1 (INT8, Triton JIT) | ~50% slower |
+| SageAttention v2 (INT4+FP8, compiled CUDA) | CUDA kernel crash |
+| Flash Attention 2 (Dao-AILab, compiled) | No difference |
+
+**PyTorch SDPA flash is the optimal backend.** No alternative tested improves
+performance on MiniCPM-o 4.5 AWQ with 512 image tokens on RTX 4090.
+
+The 2.5-4.5s inference per cycle is hardware-bound. Further gains require
+a different inference framework (SGLang, TensorRT-LLM) or a smaller model.

@@ -28,31 +28,6 @@ from app.config import (  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-# SageAttention: drop-in acceleration for attention computation.
-# If installed, monkey-patches torch SDPA to use quantized attention (INT8/FP8).
-# If not installed, PyTorch's built-in SDPA flash backend is used (still fast).
-_SAGE_ATTN = False
-try:
-    from sageattention import sageattn
-    import torch.nn.functional as F
-    _original_sdpa = F.scaled_dot_product_attention
-
-    def _sage_or_fallback(q, k, v, **kwargs):
-        """Use SageAttention for fp16/bf16, fall back to SDPA for other dtypes.
-
-        The TTS vocoder (stepaudio2/cosyvoice2) uses float32 tensors which
-        SageAttention does not support. This wrapper routes those calls to
-        the original PyTorch SDPA while the LLM (fp16) uses SageAttention.
-        """
-        if q.dtype in (torch.float16, torch.bfloat16):
-            return sageattn(q, k, v, **kwargs)
-        return _original_sdpa(q, k, v, **kwargs)
-
-    F.scaled_dot_product_attention = _sage_or_fallback
-    _SAGE_ATTN = True
-except ImportError:
-    pass
-
 
 @dataclass
 class InferenceResult:
@@ -70,7 +45,6 @@ class ModelServer:
         hf_cache = os.environ["HF_HOME"]
         os.makedirs(hf_cache, exist_ok=True)
         logger.info(f"CUDA_VISIBLE_DEVICES={CUDA_VISIBLE_DEVICES}, HF_HOME={hf_cache}")
-        logger.info(f"Attention: {'SageAttention (quantized INT8)' if _SAGE_ATTN else 'PyTorch SDPA (flash backend)'}")
         logger.info(f"Loading model from {model_path} (TTS={'enabled' if enable_tts else 'disabled'})")
 
         config = AutoConfig.from_pretrained(model_path, trust_remote_code=True)
