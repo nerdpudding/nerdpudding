@@ -188,7 +188,7 @@ For Sprint 1 we use vision + text only. STT and TTS are already in the model and
 - Needs `autoawq` from custom fork (see `app/requirements.txt`)
 - Leaves ~15 GB headroom on RTX 4090 for TTS, inference context, etc.
 - BF16 remains available via `MODEL_PATH=models/MiniCPM-o-4_5` env var
-- GGUF deferred to Sprint 3 (no TTS support in llama.cpp)
+- GGUF deferred to Sprint 4 (no TTS support in llama.cpp; Sprint 3 focuses on Docker/WebRTC)
 
 Previously (Sprint 1): Full BF16 was the default, which worked but left only ~5 GB headroom.
 

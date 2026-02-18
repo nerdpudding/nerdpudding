@@ -16,22 +16,33 @@
 - [x] Centralize configuration (config.py, env var overridable)
 - [x] Document findings, limitations, and performance observations
 
-## Sprint 2 — Input Agnosticism, TTS, WebRTC, Docker
+## Sprint 2 — AWQ, TTS, Audio Pacing
 
 ### Milestone: PoC Complete (after Step 2)
 
-Steps 1-2 deliver a successful proof of concept: smooth native-rate video with real-time AI commentary, adaptively synced, on consumer GPU hardware with ~8.6 GB VRAM. Everything from Step 3 onward is enhancement, not core validation.
+Steps 1-2 deliver a successful proof of concept: smooth native-rate video with real-time AI commentary, adaptively synced, on consumer GPU hardware with ~8.6 GB VRAM.
 
-- [x] AWQ INT4 model support (~8.6 GB VRAM, BF16 fallback via env var)
-- [x] MJPEG streaming with adaptive sync (native FPS display, EMA delay tracking)
-- [ ] TTS integration (model's built-in streaming TTS, 24kHz audio output)
-- [ ] Audio delivery pipeline (AudioManager, resampling, /api/audio-stream)
+### Milestone: Sprint 2 Complete (after Step 4b)
+
+Full end-to-end pipeline: video in, text + TTS audio out, with adaptive pacing and scene-weighted commentary density.
+
+- [x] Step 1: AWQ INT4 model support (~8.6 GB VRAM, BF16 fallback via env var)
+- [x] Step 1b: Latency optimization (frame striding, tuned defaults, ~52% latency reduction)
+- [x] Step 2: MJPEG streaming with adaptive sync (native FPS display, EMA delay tracking)
+- [x] Step 3: TTS integration (model's built-in streaming TTS, simplex API, 24kHz audio)
+- [x] Step 4: Audio delivery pipeline (AudioManager, resampling, /api/audio-stream, Web Audio API)
+- [x] Step 4b: Audio-commentary pacing (audio gate, breathing pause, token cap, scene-weighted density, "..." suppression)
+
+## Sprint 3 — Docker, WebRTC, Input Robustness
+
+Moved from Sprint 2 (Steps 5-8). Focuses on deployment, browser-native input, and polish.
+
 - [ ] Docker setup (GPU passthrough, model as bind mount, docker-compose)
 - [ ] LiveKit WebRTC (browser webcam input, TTS audio to browser)
 - [ ] Input robustness (RTSP/IP cam/phone/VLC testing, auto-reconnect)
-- [ ] UI updates (source mode selector, MJPEG video, TTS controls, status indicators)
+- [ ] UI updates (source mode selector, LiveKit player, TTS controls, status indicators)
 
-## Sprint 3 — Extended Capabilities
+## Sprint 4 — Extended Capabilities
 
 - [ ] React or Vue frontend (proper controls, styling, scalable UI)
 - [ ] STT input (voice instructions via model's built-in speech recognition)
@@ -47,11 +58,13 @@ Steps 1-2 deliver a successful proof of concept: smooth native-rate video with r
 | Sprint | Status |
 |--------|--------|
 | Sprint 1 | Complete |
-| Sprint 2 | In progress |
+| Sprint 2 | Complete |
 | Sprint 3 | Planned |
+| Sprint 4 | Planned |
 
 ## Sprint Results
 
 - [Sprint 1 Review](docs/sprint1/SPRINT1_REVIEW.md) -- findings, performance data, Sprint 2 recommendations
-- [Sprint 2 Plan](claude_plans/PLAN_sprint2.md) -- detailed 8-step implementation plan
+- [Sprint 2 Review](docs/sprint2/SPRINT2_REVIEW.md) -- findings, performance data, Sprint 3 recommendations
+- [Sprint 2 Plan](archive/2026-02-19_PLAN_sprint2.md) -- original 8-step plan (Steps 5-8 deferred to Sprint 3)
 - [Sprint 2 Log](docs/sprint2/SPRINT2_LOG.md) -- progress, bugs found, performance measurements

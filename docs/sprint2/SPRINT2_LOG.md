@@ -395,7 +395,7 @@ Step 4's live test revealed three issues:
 3. **No breathing room**: Cycles transitioned immediately with no pause
 4. **Chinese audio on "..."**: Token2wav vocoder produced Chinese speech artifacts when the model output the skip signal "..."
 
-### Implementation (per PLAN_audio_pacing.md)
+### Implementation (per archive/2026-02-19_PLAN_audio_pacing.md)
 
 **Step A — Audio-gated pacing:** AudioManager tracks `first_publish_time` + cumulative `audio_seconds`. MonitorLoop waits until `estimated_playback_end` before starting next cycle. Drift is eliminated by design.
 

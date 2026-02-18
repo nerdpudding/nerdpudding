@@ -53,13 +53,15 @@ For non-trivial changes, follow this order:
 ├── scripts/                          # Standalone utility scripts
 │   ├── test_model.py                 # Model loading + inference test
 │   ├── test_capture.py               # Frame capture + sliding window test
-│   └── test_monitor.py               # End-to-end monitor loop test
+│   ├── test_monitor.py               # End-to-end monitor loop test
+│   └── test_tts.py                   # TTS quality/latency test script
 ├── models/                           # Downloaded model files (git-ignored)
 │   ├── MiniCPM-o-4_5/               # Full BF16 model + patched model code (~19 GB)
 │   └── MiniCPM-o-4_5-awq/           # AWQ INT4 model + patched config + code (~8 GB)
-├── test_files/                       # Test assets (images, videos)
+├── test_files/                       # Test assets (images, videos, audio output)
 │   ├── images/
-│   └── videos/
+│   ├── videos/
+│   └── audio/                        # TTS test outputs (WAV files)
 ├── concepts/
 │   └── concept.md                    # Detailed concept: architecture, model selection, constraints
 ├── docs/                             # Guides, tutorials, and reference documentation
@@ -69,6 +71,7 @@ For non-trivial changes, follow this order:
 │   │   ├── SPRINT1_REVIEW.md         # Sprint summary, findings, Sprint 2 recommendations
 │   │   └── SPRINT1_LOG.md            # Step-by-step progress log with test results
 │   └── sprint2/                      # Sprint 2 deliverables
+│       ├── SPRINT2_REVIEW.md         # Sprint summary, findings, Sprint 3 recommendations
 │       └── SPRINT2_LOG.md            # Step-by-step progress log
 ├── MiniCPM-o/                        # Official model repo (cloned, do not modify)
 ├── MiniCPM-V-CookBook/              # Cookbook with demos (cloned, do not modify)

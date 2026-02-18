@@ -25,6 +25,53 @@ Or use a `.env` file with your preferred settings.
 | `STREAM_DELAY_INIT` | 5.0 | 0-15.0 | Initial video-commentary sync delay (0=no sync) |
 | `MODEL_PATH` | models/MiniCPM-o-4_5-awq | path | Model directory |
 
+## Video Sources
+
+The system accepts any source that OpenCV's `VideoCapture` can open. Enter the source in the browser UI's "Video source" field.
+
+| Source | Format | Example |
+|--------|--------|---------|
+| Local video file | File path | `/home/user/match.mp4` |
+| Webcam | Device ID (integer) | `0` |
+| RTSP stream | RTSP URL | `rtsp://192.168.1.100:554/stream` |
+| HTTP MJPEG stream | HTTP URL | `http://192.168.1.100:8080/video` |
+| HTTP video stream | HTTP URL | `http://example.com/stream.mp4` |
+
+Video files loop automatically — useful for testing and development.
+
+### Tips for specific sources
+
+**Phone as camera (Android/iOS):**
+Install [IP Webcam](https://play.google.com/store/apps/details?id=com.pas.webcam) (Android) or a similar app. It serves an MJPEG stream on your local network. Use the URL it shows (e.g. `http://192.168.1.50:8080/video`).
+
+**VLC re-streaming:**
+Stream any content from another PC as RTSP:
+```bash
+vlc input.mp4 --sout '#rtp{sdp=rtsp://:8554/stream}'
+```
+Then use `rtsp://<that-pc-ip>:8554/stream` as the source.
+
+**IP cameras:**
+Most IP cameras serve RTSP or HTTP MJPEG. Check your camera's manual for the stream URL. Common patterns:
+- `rtsp://<ip>:554/stream1` (many brands)
+- `http://<ip>/cgi-bin/mjpeg` (older cameras)
+- `rtsp://user:password@<ip>:554/Streaming/Channels/1` (Hikvision)
+
+**YouTube / Twitch:**
+Not supported directly (DRM, dynamic URLs). Use `yt-dlp -g <url>` to extract the direct stream URL. Results vary by format.
+
+### Scene detection by source type
+
+Different sources produce different levels of visual change. Adjust `CHANGE_THRESHOLD` accordingly:
+
+| Source type | Suggested threshold | Why |
+|---|---|---|
+| Sports broadcast | 5.0-8.0 | Frequent camera cuts and pans |
+| Animation / gaming | 5.0 (default) | Consistent visual changes |
+| Security camera (static) | 8.0-15.0 | Skip lighting changes, react to movement |
+| Live webcam | 3.0-5.0 | Camera shake creates constant small changes |
+| Phone camera (handheld) | 3.0-5.0 | Hand movement causes high baseline diff |
+
 ## VRAM Usage
 
 | Mode | Approximate VRAM | Notes |
@@ -94,14 +141,9 @@ CHANGE_THRESHOLD=10.0  # Require bigger scene changes before commenting
 
 ## Scene Change Detection
 
-The system uses pixel difference between frames to detect scene changes. Below `CHANGE_THRESHOLD`, the cycle is skipped (no inference, no audio).
+The system uses pixel difference between frames to detect scene changes. Below `CHANGE_THRESHOLD`, the cycle is skipped (no inference, no audio). Set to 0 to never skip (always run inference).
 
-- **Animation / gaming**: 5.0 (default) works well
-- **Live video with camera movement**: Try 3.0-5.0 (cameras create constant change)
-- **Static security camera**: Try 8.0-15.0 (skip minor lighting changes)
-- **Sports broadcast**: 5.0-8.0 (frequent cuts and camera pans)
-
-Set to 0 to never skip (always run inference).
+See [Scene detection by source type](#scene-detection-by-source-type) above for per-source recommendations.
 
 ## Video-Commentary Sync
 

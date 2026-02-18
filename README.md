@@ -2,7 +2,7 @@
 
 Local, GPU-accelerated application that streams live video into a multimodal AI model for real-time commentary with text-to-speech. Point it at a football match, a security camera, a nature stream, or any video source — and get a live AI commentator that sees, understands, and speaks about what's happening.
 
-**Status:** Experimental. Core pipeline works end-to-end (video in, text + audio out). TTS pacing, Docker, and WebRTC are in active development. See [Roadmap](#current-status) for details.
+**Status:** Sprint 2 complete. Core pipeline works end-to-end: video in, text + TTS audio out, with adaptive pacing. Docker and WebRTC are next (Sprint 3). See [Roadmap](#current-status) for details.
 
 ## Table of Contents
 
@@ -42,7 +42,29 @@ Adapt the team names and context to your match. The AI will commentate with natu
 
 **Tip:** The prompt makes a big difference. Experiment with it while the video is running — you can change the instruction at any time. For example, the model may read the match clock too often. Adding a constraint like *"You may mention the match time only at 5, 10, 15, ... 90 minutes play time"* fixes that. See the [Tuning Guide](docs/tuning_guide.md#prompt-tips) for more prompt examples.
 
-Video sources: local files, webcam (device ID `0`), RTSP streams (`rtsp://...`), or any OpenCV-compatible source.
+## Video Sources
+
+Enter any of these in the "Video source" field in the browser UI:
+
+| Source | Format | Example |
+|--------|--------|---------|
+| Local video file | File path | `/home/user/match.mp4` |
+| Webcam | Device ID (integer) | `0` |
+| RTSP stream | RTSP URL | `rtsp://192.168.1.100:554/stream` |
+| HTTP MJPEG stream | HTTP URL | `http://192.168.1.100:8080/video` |
+| HTTP video stream | HTTP URL | `http://example.com/stream.mp4` |
+
+The system uses OpenCV's `VideoCapture` underneath, so anything OpenCV supports will work. Video files loop automatically for testing.
+
+**Phone as camera:** Install [IP Webcam](https://play.google.com/store/apps/details?id=com.pas.webcam) (Android) or similar app, then use the MJPEG URL it provides (e.g. `http://192.168.1.50:8080/video`).
+
+**VLC re-streaming:** Stream any content as RTSP from another PC:
+```bash
+vlc input.mp4 --sout '#rtp{sdp=rtsp://:8554/stream}'
+# Then use: rtsp://<that-pc-ip>:8554/stream
+```
+
+**YouTube / Twitch:** Not supported directly. Use `yt-dlp -g <url>` to extract the direct stream URL, then paste that URL — but results vary depending on format and DRM.
 
 ## Getting Started
 
@@ -206,7 +228,7 @@ See the [Project hierarchy](AI_INSTRUCTIONS.md#project-hierarchy) in AI_INSTRUCT
 
 ## Current Status
 
-**Sprint 2 in progress.** Steps 1-4 complete (AWQ, latency, MJPEG sync, TTS + audio pacing). Docker and LiveKit are next. The core pipeline works end-to-end: video in, text + TTS audio out, with adaptive pacing and scene-weighted commentary density. See [Sprint 2 Plan](claude_plans/PLAN_sprint2.md) for details.
+**Sprint 2 complete.** Full end-to-end pipeline: video in, text + TTS audio out, with adaptive pacing and scene-weighted commentary density. See [Sprint 2 Review](docs/sprint2/SPRINT2_REVIEW.md) for detailed findings.
 
 | Metric | Text-only | With TTS |
 |--------|-----------|----------|
@@ -216,7 +238,7 @@ See the [Project hierarchy](AI_INSTRUCTIONS.md#project-hierarchy) in AI_INSTRUCT
 | Display frame rate | Native (~24 FPS via MJPEG) | Same |
 | Commentary output | Streaming text (SSE) | Text + audio (Web Audio API) |
 
-Remaining Sprint 2 work: Docker setup, LiveKit WebRTC, input robustness, UI polish.
+**Next:** Sprint 3 — Docker, LiveKit WebRTC, input robustness, UI polish.
 
 ## Documentation
 
@@ -226,6 +248,7 @@ Remaining Sprint 2 work: Docker setup, LiveKit WebRTC, input robustness, UI poli
 - [Roadmap](roadmap.md) -- project roadmap and sprint status
 - [Sprint 1 Review](docs/sprint1/SPRINT1_REVIEW.md) -- sprint summary, findings, Sprint 2 ideas
 - [Sprint 1 Log](docs/sprint1/SPRINT1_LOG.md) -- setup steps, test results, findings
+- [Sprint 2 Review](docs/sprint2/SPRINT2_REVIEW.md) -- sprint summary, findings, Sprint 3 recommendations
 - [Sprint 2 Log](docs/sprint2/SPRINT2_LOG.md) -- AWQ, latency, MJPEG sync, TTS, audio pacing
 - [Model Patches](docs/model_patches.md) -- patches applied to model files (must reapply after update)
 - [Lessons Learned](docs/lessons_learned.md) -- what worked and didn't (context for AI assistants)
