@@ -18,6 +18,34 @@ Proof-of-concept application for real-time video conversation with a multimodal 
 - **Build on existing work** — evaluate and adapt code from the cloned repos before writing from scratch.
 - **Local-first** — everything runs on the local machine, no cloud dependencies.
 - **Docker where possible** — containerized services for reproducibility.
+- **Security-conscious** — follow the security guidelines below, even for research code.
+
+## Security
+
+This is research/experimental software, not a production service. But since the repo is public, follow these practices:
+
+### Current safeguards
+- Server binds to `127.0.0.1` by default (localhost only). Override with `SERVER_HOST=0.0.0.0` for Docker or network access.
+- No authentication — acceptable for local use, must be added before exposing on untrusted networks.
+- Subscriber queues are bounded (drop data for slow consumers, prevent memory exhaustion).
+- Instruction input has a length limit (2000 chars).
+- `trust_remote_code=True` is required for MiniCPM-o — model files are user-downloaded, not fetched from untrusted sources.
+
+### Rules for new code
+- **Never use `eval()`, `exec()`, `os.system()`, or `subprocess` with `shell=True`**.
+- **Never pass user input to file path operations** without validation. If accepting paths from users (API endpoints), validate they don't contain `..` or traverse outside expected directories.
+- **Bound all queues and buffers** — use `maxsize` on `asyncio.Queue`, `maxlen` on `deque`. Never allow unbounded growth from external input.
+- **Don't leak internal errors to clients** — log the full error, return a generic message.
+- **Keep secrets out of code** — use environment variables. `.env` files are gitignored.
+- **Pin dependency versions** — specify exact versions in requirements.txt.
+
+### Docker security (Sprint 3)
+When containerizing:
+- Run as non-root user (`USER appuser` in Dockerfile)
+- Don't expose ports without documenting the security implications
+- Mount model files read-only (`:ro`)
+- Use multi-stage builds to minimize image attack surface
+- Never bake secrets or model files into the image
 
 ## Workflow
 

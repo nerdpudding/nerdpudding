@@ -103,7 +103,7 @@ class MonitorLoop:
         - dict: cycle metadata (type="cycle_end", timing, frame IDs)
         - None: stop signal
         """
-        q: asyncio.Queue[Union[str, dict, None]] = asyncio.Queue()
+        q: asyncio.Queue[Union[str, dict, None]] = asyncio.Queue(maxsize=500)
         self._subscribers.add(q)
         logger.debug(f"Subscriber added (total: {len(self._subscribers)})")
         return q
@@ -116,7 +116,10 @@ class MonitorLoop:
     def _publish(self, item) -> None:
         """Send an item to all subscribers. Called from the event loop thread."""
         for q in self._subscribers:
-            q.put_nowait(item)
+            try:
+                q.put_nowait(item)
+            except asyncio.QueueFull:
+                pass  # Drop data for slow consumers
 
     def _scene_diff(self, current_frame: Image.Image) -> float:
         """Compute mean pixel difference from last inference frame.

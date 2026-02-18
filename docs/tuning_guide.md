@@ -24,6 +24,8 @@ Or use a `.env` file with your preferred settings.
 | `MAX_SLICE_NUMS` | 1 | 1-9 | Image detail level (1=fast, higher=detailed+slow) |
 | `STREAM_DELAY_INIT` | 5.0 | 0-15.0 | Initial video-commentary sync delay (0=no sync) |
 | `MODEL_PATH` | models/MiniCPM-o-4_5-awq | path | Model directory |
+| `SERVER_HOST` | 127.0.0.1 | IP address | Bind address (use `0.0.0.0` for network/Docker) |
+| `SERVER_PORT` | 8199 | port number | Server port |
 
 ## Video Sources
 
