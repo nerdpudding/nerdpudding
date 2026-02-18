@@ -1,12 +1,13 @@
 # Tasks - February 19, 2026
 
-## Carry-over: Audio timing optimization
+## Priority 1: Audio-commentary pacing (awaiting approval)
 
-Step 4 audio delivery works but pacing needs tuning. With TTS enabled, inference cycles fire faster than audio can naturally play back. Need to explore:
-- Shorter responses via prompt tuning when TTS active
-- Increased INFERENCE_INTERVAL for TTS mode
-- Cooldown after audio finishes before next cycle
-- Dynamic timing based on audio queue depth
+Plan: `claude_plans/PLAN_audio_pacing.md` — submitted for review.
+
+- [ ] Step A: Audio-gated pacing (fixes drift)
+- [ ] Step B: Inter-cycle breathing pause
+- [ ] Step C: MAX_NEW_TOKENS cap for TTS mode
+- [ ] Step D: Scene-weighted commentary length
 
 ## Sprint 2 remaining steps
 
