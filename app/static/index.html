@@ -42,6 +42,7 @@
 
   .source-row { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
   .source-row input { flex: 1; padding: 6px 10px; border: 1px solid #0f3460; border-radius: 6px; background: #1a1a2e; color: #e0e0e0; font-size: 13px; }
+  .source-row select { padding: 6px 10px; border: 1px solid #0f3460; border-radius: 6px; background: #1a1a2e; color: #e0e0e0; font-size: 13px; }
   .source-row label { font-size: 12px; color: #888; white-space: nowrap; }
 
   .btn-audio { background: #0f3460; color: #e0e0e0; font-size: 18px; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; padding: 0; }
@@ -68,9 +69,13 @@
     <div class="panel-title">Video</div>
     <div class="source-row">
       <label>Source:</label>
-      <input type="text" id="source-input" value="test_files/videos/test.mp4" placeholder="File path, device ID (0), or stream URL (rtsp://...)">
+      <input type="text" id="source-input" value="http://localhost:8088/api/mjpeg" placeholder="File path, device ID (0), or stream URL (rtsp://...)">
       <button class="btn-primary" id="btn-start">Start</button>
       <button class="btn-danger" id="btn-stop" disabled>Stop</button>
+    </div>
+    <div class="source-row">
+      <label>Profile:</label>
+      <select id="profile-select"></select>
     </div>
     <img id="video-frame" style="display:none" alt="Video frame">
     <div id="no-video">No video source active</div>
@@ -99,6 +104,7 @@ const instrInput = document.getElementById('instruction-input');
 const btnStart = document.getElementById('btn-start');
 const btnStop = document.getElementById('btn-stop');
 const btnSend = document.getElementById('btn-send');
+const profileSelect = document.getElementById('profile-select');
 
 let eventSource = null;
 let cycleCount = 0;
@@ -355,7 +361,48 @@ btnAudio.addEventListener('click', () => {
   }
 });
 
-// Initial status check
+// --- Prompt profiles ---
+
+let profileData = {};
+
+async function loadProfiles() {
+  try {
+    const res = await fetch(API + '/api/profiles');
+    const data = await res.json();
+    profileData = data.profiles;
+    profileSelect.innerHTML = '';
+    for (const [key, info] of Object.entries(data.profiles)) {
+      const opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = info.label;
+      if (key === data.active) opt.selected = true;
+      profileSelect.appendChild(opt);
+    }
+    // Prefill instruction with active profile's suggestion
+    const active = data.profiles[data.active];
+    if (active && active.suggestion && !instrInput.value.trim()) {
+      instrInput.value = active.suggestion;
+    }
+  } catch (e) { /* ignore */ }
+}
+
+profileSelect.addEventListener('change', async () => {
+  try {
+    await fetch(API + '/api/profiles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profile: profileSelect.value }),
+    });
+    // Update instruction suggestion
+    const info = profileData[profileSelect.value];
+    if (info && info.suggestion) {
+      instrInput.value = info.suggestion;
+    }
+  } catch (e) { alert('Failed to switch profile: ' + e.message); }
+});
+
+// Initial setup
+loadProfiles();
 checkTTS();
 fetchStatus();
 </script>

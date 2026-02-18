@@ -45,3 +45,6 @@ models/
 
 # Logs
 *.log
+
+# Temporary webcam setup folder (not part of project)
+webcam/

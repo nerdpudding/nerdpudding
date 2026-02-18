@@ -17,6 +17,7 @@ from app.config import (
     ENABLE_TTS,
     FRAME_JPEG_QUALITY,
     MJPEG_FPS,
+    PROMPT_PROFILES,
     SERVER_HOST,
     SERVER_PORT,
     STREAM_DELAY_INIT,
@@ -41,6 +42,10 @@ class InstructionRequest(BaseModel):
     instruction: str = Field(..., max_length=2000)
 
 
+class ProfileRequest(BaseModel):
+    profile: str
+
+
 class StatusResponse(BaseModel):
     model_loaded: bool
     capture_running: bool
@@ -49,6 +54,7 @@ class StatusResponse(BaseModel):
     cycle_count: int
     frames_buffered: int
     tts_enabled: bool
+    active_profile: str
 
 
 # --- App lifecycle ---
@@ -68,6 +74,7 @@ async def lifespan(app: FastAPI):
     app.state.capture = capture
     app.state.monitor = monitor
     app.state.audio_manager = audio_manager
+    app.state.active_profile = "default"
     app.state.monitor_task = asyncio.create_task(monitor.run())
     await monitor.wait_started()
 
@@ -114,6 +121,7 @@ async def get_status(request: Request):
         cycle_count=monitor.cycle_count,
         frames_buffered=window.count,
         tts_enabled=ENABLE_TTS,
+        active_profile=request.app.state.active_profile,
     )
 
 
@@ -143,6 +151,28 @@ async def set_instruction(body: InstructionRequest, request: Request):
     monitor = request.app.state.monitor
     monitor.set_instruction(body.instruction)
     return {"status": "ok", "instruction": body.instruction}
+
+
+@app.get("/api/profiles")
+async def list_profiles(request: Request):
+    active = request.app.state.active_profile
+    return {
+        "active": active,
+        "profiles": {
+            key: {"label": p["label"], "suggestion": p.get("suggestion", "")}
+            for key, p in PROMPT_PROFILES.items()
+        },
+    }
+
+
+@app.post("/api/profiles")
+async def set_profile(body: ProfileRequest, request: Request):
+    if body.profile not in PROMPT_PROFILES:
+        raise HTTPException(400, f"Unknown profile: {body.profile}")
+    request.app.state.active_profile = body.profile
+    monitor = request.app.state.monitor
+    monitor.set_commentator_prompt(PROMPT_PROFILES[body.profile]["prompt"])
+    return {"status": "ok", "active": body.profile}
 
 
 @app.get("/api/stream")

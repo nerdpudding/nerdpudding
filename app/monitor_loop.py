@@ -41,6 +41,7 @@ class MonitorLoop:
         self._window = window
         self._audio_manager = audio_manager
         self._instruction: Optional[str] = None
+        self._commentator_prompt: str = COMMENTATOR_PROMPT
         self._running = False
         self._generating = False
         self._stop_requested = False
@@ -95,6 +96,13 @@ class MonitorLoop:
             if not self._generating:
                 self._cycle_event.set()
         logger.info(f"Instruction {'set' if instruction else 'cleared'}: {instruction}")
+
+    def set_commentator_prompt(self, prompt: str) -> None:
+        """Switch the system prompt (e.g. when user selects a different profile)."""
+        self._commentator_prompt = prompt
+        self._last_response = ""
+        self._last_inference_frame = None
+        logger.info(f"Commentator prompt changed ({len(prompt)} chars)")
 
     def subscribe(self) -> asyncio.Queue[Union[str, dict, None]]:
         """Subscribe to output events. Returns a queue that receives:
@@ -160,7 +168,7 @@ class MonitorLoop:
 
     def _build_prompt(self, instruction: str, scene_diff: float = 255.0) -> str:
         """Build the full prompt with commentator system message and context."""
-        parts = [COMMENTATOR_PROMPT]
+        parts = [self._commentator_prompt]
         if self._last_response and self._last_response.strip() != "...":
             parts.append(
                 f'\nYour last comment was: "{self._last_response}"\n'
