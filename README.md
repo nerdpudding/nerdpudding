@@ -21,6 +21,7 @@ Local, GPU-accelerated application that streams live video into a multimodal AI 
 - [Development Approach](#development-approach)
 - [Project Structure & Agents](#project-structure--agents)
 - [Documentation](#documentation)
+- [Acknowledgments](#acknowledgments)
 - [Support](#support)
 
 ## Demo: Live Sports Commentary
@@ -258,6 +259,10 @@ See the [Project hierarchy](AI_INSTRUCTIONS.md#project-hierarchy) in AI_INSTRUCT
 - [Model Patches](docs/model_patches.md) -- patches applied to model files (must reapply after update)
 - [Lessons Learned](docs/lessons_learned.md) -- what worked and didn't (context for AI assistants)
 - [docs/](docs/) -- all guides and reference documentation
+
+## Acknowledgments
+
+Built on [MiniCPM-o 4.5](https://huggingface.co/openbmb/MiniCPM-o-4_5) by [OpenBMB](https://github.com/OpenBMB) — an impressive omni-modal model with vision, speech, and TTS in a single 9B-parameter package. The model is Apache 2.0 licensed. This project applies minor patches to the model code for streaming compatibility (see [Model Patches](docs/model_patches.md)).
 
 ## Support
 
