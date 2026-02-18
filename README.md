@@ -1,5 +1,8 @@
 # Video Chat with AI
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Ko-fi](https://img.shields.io/badge/Support-Ko--fi-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/nerdpudding)
+
 Local, GPU-accelerated application that streams live video into a multimodal AI model for real-time commentary with text-to-speech. Point it at a football match, a security camera, a nature stream, or any video source — and get a live AI commentator that sees, understands, and speaks about what's happening.
 
 **Status:** Sprint 2 complete. Core pipeline works end-to-end: video in, text + TTS audio out, with adaptive pacing. Docker and WebRTC are next (Sprint 3). See [Roadmap](#current-status) for details.
@@ -7,6 +10,7 @@ Local, GPU-accelerated application that streams live video into a multimodal AI 
 ## Table of Contents
 
 - [Demo: Live Sports Commentary](#demo-live-sports-commentary)
+- [Video Sources](#video-sources)
 - [Getting Started](#getting-started)
 - [Goal](#goal)
 - [Architecture Overview](#architecture-overview)
@@ -17,6 +21,7 @@ Local, GPU-accelerated application that streams live video into a multimodal AI 
 - [Development Approach](#development-approach)
 - [Project Structure & Agents](#project-structure--agents)
 - [Documentation](#documentation)
+- [Support](#support)
 
 ## Demo: Live Sports Commentary
 
@@ -253,3 +258,13 @@ See the [Project hierarchy](AI_INSTRUCTIONS.md#project-hierarchy) in AI_INSTRUCT
 - [Model Patches](docs/model_patches.md) -- patches applied to model files (must reapply after update)
 - [Lessons Learned](docs/lessons_learned.md) -- what worked and didn't (context for AI assistants)
 - [docs/](docs/) -- all guides and reference documentation
+
+## Support
+
+If you find this project useful, consider supporting development:
+
+[![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/nerdpudding)
+
+## License
+
+[MIT](LICENSE) -- use it freely, just include the copyright notice.
