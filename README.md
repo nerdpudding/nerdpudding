@@ -128,6 +128,8 @@ ENABLE_TTS=true python -m app.main
 
 Open the browser, enter a video source, click **Start**, type an instruction, and press **Send**. The AI commentary streams as text in the right panel. With TTS enabled, you'll also hear it — use the speaker button to mute/unmute.
 
+**Note:** The server binds to `127.0.0.1` by default — only accessible from your own machine. To allow access from other devices on your network (e.g. for phone testing), use `SERVER_HOST=0.0.0.0 python -m app.main`. There is no authentication — do not expose on untrusted networks.
+
 ### Testing Without a Browser
 
 ```bash

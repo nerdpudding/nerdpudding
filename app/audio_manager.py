@@ -41,7 +41,7 @@ class AudioManager:
         - bytes: PCM audio chunk (48kHz, mono, int16 LE)
         - None: stop signal
         """
-        q: asyncio.Queue[Optional[bytes]] = asyncio.Queue()
+        q: asyncio.Queue[Optional[bytes]] = asyncio.Queue(maxsize=200)
         self._subscribers.add(q)
         logger.debug(f"Audio subscriber added (total: {len(self._subscribers)})")
         return q
@@ -63,7 +63,10 @@ class AudioManager:
                 self._first_publish_time = time.time()
             self._audio_seconds += len(data) / (self.SAMPLE_RATE * self.BYTES_PER_SAMPLE)
         for q in self._subscribers:
-            q.put_nowait(data)
+            try:
+                q.put_nowait(data)
+            except asyncio.QueueFull:
+                pass  # Drop data for slow consumers
 
     def reset_clock(self) -> None:
         """Reset audio clock for a new cycle. Call at cycle start."""

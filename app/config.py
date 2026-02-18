@@ -103,7 +103,9 @@ COMMENTATOR_PROMPT = os.getenv("COMMENTATOR_PROMPT", (
 # Server
 # ---------------------------------------------------------------------------
 # Host and port for the FastAPI server.
-SERVER_HOST = os.getenv("SERVER_HOST", "0.0.0.0")
+# Default: localhost only. Set to 0.0.0.0 to allow network access (e.g. Docker).
+# WARNING: This server has no authentication. Do not expose on untrusted networks.
+SERVER_HOST = os.getenv("SERVER_HOST", "127.0.0.1")
 SERVER_PORT = int(os.getenv("SERVER_PORT", "8199"))
 
 # JPEG quality for the /api/frame endpoint (1-100). Lower = smaller, faster.

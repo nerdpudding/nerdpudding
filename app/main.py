@@ -10,7 +10,7 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.audio_manager import AudioManager
 from app.config import (
@@ -38,7 +38,7 @@ class StartRequest(BaseModel):
 
 
 class InstructionRequest(BaseModel):
-    instruction: str
+    instruction: str = Field(..., max_length=2000)
 
 
 class StatusResponse(BaseModel):
