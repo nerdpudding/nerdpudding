@@ -1,4 +1,4 @@
-# AI Instructions — Video Chat with AI
+# AI Instructions — NerdPudding
 
 ## Project overview
 

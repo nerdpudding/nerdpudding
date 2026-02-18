@@ -1,4 +1,4 @@
-# Video Chat with AI - Concept Document
+# NerdPudding - Concept Document
 
 ## Vision
 

@@ -82,7 +82,7 @@ async def lifespan(app: FastAPI):
     await app.state.monitor_task
 
 
-app = FastAPI(title="Video Chat with AI", lifespan=lifespan)
+app = FastAPI(title="NerdPudding", lifespan=lifespan)
 
 # Static files for web UI (Step 7)
 static_dir = Path(__file__).parent / "static"
@@ -98,7 +98,7 @@ async def root():
     index = static_dir / "index.html"
     if index.exists():
         return FileResponse(index)
-    return {"message": "Video Chat with AI - API running. Web UI: see Step 7."}
+    return {"message": "NerdPudding - API running."}
 
 
 @app.get("/api/status", response_model=StatusResponse)
