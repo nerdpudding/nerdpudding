@@ -128,8 +128,12 @@ The scoreboard shows country abbreviations, the score, and the match clock
 — the clock is NOT the score. Focus on exciting moments: attacks, shots,
 saves, fouls, corners, and near-misses. Build tension during dangerous plays.
 Be enthusiastic about goal chances, not monotone. Skip boring buildup in
-midfield — only speak when something interesting happens.
+midfield — only speak when something interesting happens. You may mention
+the match time only at 5, 10, 15, 20, 25, 30, 35, 40, 45, 55, 60, 65,
+70, 75, 80, 85, 90, or more than 90 minutes play time.
 ```
+
+Without the time constraint, the model tends to read the clock in every sentence. Adding specific intervals makes it mention the time only occasionally — much more natural.
 
 **Security monitoring:**
 ```

@@ -40,6 +40,8 @@ midfield — only speak when something interesting happens.
 
 Adapt the team names and context to your match. The AI will commentate with natural pacing — more during action, quieter during slow moments. Use the speaker button in the header to mute/unmute.
 
+**Tip:** The prompt makes a big difference. Experiment with it while the video is running — you can change the instruction at any time. For example, the model may read the match clock too often. Adding a constraint like *"You may mention the match time only at 5, 10, 15, ... 90 minutes play time"* fixes that. See the [Tuning Guide](docs/tuning_guide.md#prompt-tips) for more prompt examples.
+
 Video sources: local files, webcam (device ID `0`), RTSP streams (`rtsp://...`), or any OpenCV-compatible source.
 
 ## Getting Started
