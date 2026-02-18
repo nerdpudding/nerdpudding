@@ -1,9 +1,11 @@
-# Video Chat with AI
+# NerdPudding
+
+*The proof is in the pudding.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Ko-fi](https://img.shields.io/badge/Support-Ko--fi-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/nerdpudding)
 
-Local, GPU-accelerated application that streams live video into a multimodal AI model for real-time commentary with text-to-speech. Point it at a football match, a security camera, a nature stream, or any video source — and get a live AI commentator that sees, understands, and speaks about what's happening.
+Real-time AI video commentary with text-to-speech. Point it at a football match, a security camera, a nature stream, or any video source — and get a live AI commentator that sees, understands, and speaks about what's happening. Runs locally on your GPU, no cloud needed.
 
 **Status:** Sprint 2 complete. Core pipeline works end-to-end: video in, text + TTS audio out, with adaptive pacing. Docker and WebRTC are next (Sprint 3). See [Roadmap](#current-status) for details.
 
@@ -90,16 +92,16 @@ vlc input.mp4 --sout '#rtp{sdp=rtsp://:8554/stream}'
 ### Quick Start
 
 ```bash
-git clone <your-repo-url>
-cd video_chat
+git clone https://github.com/nerdpudding/nerdpudding.git
+cd nerdpudding
 
 # Clone the reference repos (not included in this repo)
 git clone https://github.com/OpenBMB/MiniCPM-o.git
 git clone https://github.com/OpenBMB/MiniCPM-V-CookBook.git
 
 # 1. Create conda environment
-conda create -n video_chat python=3.12 -y
-conda activate video_chat
+conda create -n nerdpudding python=3.12 -y
+conda activate nerdpudding
 pip install -r app/requirements.txt
 
 # 2. Download AWQ INT4 model (~8 GB, default)
