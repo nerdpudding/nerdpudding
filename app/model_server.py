@@ -64,6 +64,11 @@ class ModelServer:
             torch_dtype=dtype,
         )
         self.model.eval().cuda()
+        try:
+            self.model = torch.compile(self.model)
+            logger.info("torch.compile() enabled")
+        except Exception as e:
+            logger.warning(f"torch.compile() failed, using eager mode: {e}")
         self.is_awq = is_awq
         self.tts_enabled = enable_tts
 
