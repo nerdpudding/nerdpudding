@@ -433,3 +433,11 @@ Tested with full football match (Brazil vs France), `ENABLE_TTS=true`:
 See [Tuning Guide](../tuning_guide.md) for per-GPU recommendations and prompt tips.
 
 ---
+
+## Milestone: Sprint 2 Complete
+
+Tagged as `sprint2-milestone`. Backup branch: `sprint2`.
+
+Sprint 2 delivered: AWQ INT4 support (54% VRAM reduction), latency optimization (52% reduction), MJPEG streaming with adaptive sync, TTS integration with audio-gated pacing, and scene-weighted commentary density. Full end-to-end pipeline: video in, text + TTS audio out.
+
+Steps 5-8 (Docker, LiveKit, input robustness, UI) moved to Sprint 3. See [Sprint 2 Review](SPRINT2_REVIEW.md) for detailed findings and Sprint 3 recommendations.

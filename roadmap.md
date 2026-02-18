@@ -55,12 +55,12 @@ Moved from Sprint 2 (Steps 5-8). Focuses on deployment, browser-native input, an
 
 ## Status
 
-| Sprint | Status |
-|--------|--------|
-| Sprint 1 | Complete |
-| Sprint 2 | Complete |
-| Sprint 3 | Planned |
-| Sprint 4 | Planned |
+| Sprint | Status | Tag | Branch |
+|--------|--------|-----|--------|
+| Sprint 1 | Complete | `poc-milestone` | `sprint1` |
+| Sprint 2 | Complete | `sprint2-milestone` | `sprint2` |
+| Sprint 3 | Planned | | |
+| Sprint 4 | Planned | | |
 
 ## Sprint Results
 
