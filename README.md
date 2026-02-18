@@ -7,7 +7,7 @@
 
 Real-time AI video commentary with text-to-speech. Point it at a football match, a security camera, a nature stream, or any video source — and get a live AI commentator that sees, understands, and speaks about what's happening. Runs locally on your GPU, no cloud needed.
 
-**Status:** Sprint 2 complete. Core pipeline works end-to-end: video in, text + TTS audio out, with adaptive pacing. Docker and WebRTC are next (Sprint 3). See [Roadmap](#current-status) for details.
+**Status:** Sprint 3 in progress. Core pipeline works end-to-end: video in, text + TTS audio out, with adaptive pacing. Now adding HTTP MJPEG support, prompt profiles, config presets, and Docker. See [Roadmap](#current-status) for details.
 
 ## Table of Contents
 
@@ -248,11 +248,12 @@ See the [Project hierarchy](AI_INSTRUCTIONS.md#project-hierarchy) in AI_INSTRUCT
 | Display frame rate | Native (~24 FPS via MJPEG) | Same |
 | Commentary output | Streaming text (SSE) | Text + audio (Web Audio API) |
 
-**Next:** Sprint 3 — Docker, LiveKit WebRTC, input robustness, UI polish.
+**Next:** Docker setup, LiveKit WebRTC, remaining input robustness, UI polish.
 
 ## Documentation
 
 - [Tuning Guide](docs/tuning_guide.md) -- per-GPU settings, TTS pacing, prompt tips
+- [Tuning Test Results](docs/tuning_test_results.md) -- preset benchmarks, attention backend comparisons
 - [AI Instructions](AI_INSTRUCTIONS.md) -- project rules, hierarchy, agent table
 - [Detailed Concept](concepts/concept.md) -- full concept with diagrams and technical details
 - [Roadmap](roadmap.md) -- project roadmap and sprint status

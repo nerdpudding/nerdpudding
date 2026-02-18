@@ -88,6 +88,20 @@ Ongoing log of what worked and what didn't during development. Primarily intende
 
 ---
 
+## Attention backend alternatives don't help this model
+
+**Lesson:** PyTorch SDPA flash (built into PyTorch 2.7) is already near-optimal for MiniCPM-o 4.5 AWQ on RTX 4090. Alternative attention backends either don't help or actively break things.
+
+**Tested (Sprint 3):**
+- SageAttention v1 (INT8, Triton JIT): ~50% slower than SDPA flash
+- SageAttention v2 (INT4+FP8, compiled CUDA): CUDA kernel crash in Qwen3 LLM attention
+- Flash Attention 2 (Dao-AILab, compiled from source): no measurable difference vs SDPA flash
+- torch.compile(): modest improvement on skip responses, kept
+
+**Rule:** Don't assume "quantized attention" or "specialized kernels" = faster. Always benchmark against the PyTorch default. For short sequences (~700 tokens) with AWQ models, SDPA flash is hard to beat. See `docs/tuning_test_results.md` for full data.
+
+---
+
 ## Clear HF cache after patching model code
 
 **Lesson:** When using `trust_remote_code=True`, transformers caches the model's Python files in `HF_HOME/modules/transformers_modules/<model_name>/`. If you patch the model's `.py` files in the `models/` directory, the cached (unpatched) version may still be loaded.

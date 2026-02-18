@@ -37,6 +37,11 @@ Full end-to-end pipeline: video in, text + TTS audio out, with adaptive pacing a
 
 Moved from Sprint 2 (Steps 5-8). Focuses on deployment, browser-native input, and polish.
 
+- [x] HTTP MJPEG stream support (multipart/x-mixed-replace parser in frame_capture.py)
+- [x] Prompt profiles (switchable AI personalities from web UI dropdown)
+- [x] Config preset system (Beast/Sniper/Owl/Sentry combos, tuning guide)
+- [x] Performance investigation (SageAttention v1/v2, Flash Attention 2 — SDPA flash is optimal)
+- [x] torch.compile() optimization (modest improvement on skip responses)
 - [ ] Docker setup (GPU passthrough, model as bind mount, docker-compose)
 - [ ] LiveKit WebRTC (browser webcam input, TTS audio to browser)
 - [ ] Input robustness (RTSP/IP cam/phone/VLC testing, auto-reconnect)
@@ -62,7 +67,7 @@ Moved from Sprint 2 (Steps 5-8). Focuses on deployment, browser-native input, an
 |--------|--------|-----|--------|
 | Sprint 1 | Complete | `poc-milestone` | `sprint1` |
 | Sprint 2 | Complete | `sprint2-milestone` | `sprint2` |
-| Sprint 3 | Planned | | |
+| Sprint 3 | In Progress | | `sprint3` |
 | Sprint 4 | Planned | | |
 
 ## Sprint Results
