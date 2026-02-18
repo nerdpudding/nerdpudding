@@ -172,9 +172,11 @@ Exact cause unclear — could be short sequence lengths (~700 tokens), AWQ model
 interaction, Triton JIT overhead, or a combination. PyTorch SDPA flash is
 simply faster here.
 
-SageAttention v2 (INT4+FP8, compiled CUDA kernels) may perform differently.
-To be tested in Docker build during Sprint 3.
+SageAttention v2.2.0 (INT4+FP8, compiled CUDA kernels) was also tested: CUDA
+kernel crash ("unspecified launch failure") during LLM attention in Qwen3.
+Incompatible with this model. Both v1 and v2 ruled out.
 
 ### Key takeaway
 
-Always benchmark. SageAttention v1 does not help this specific workload.
+SageAttention (v1 and v2) does not work with MiniCPM-o 4.5 AWQ on RTX 4090.
+PyTorch SDPA flash remains the best attention backend for this setup.

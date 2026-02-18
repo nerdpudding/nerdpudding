@@ -35,7 +35,20 @@ _SAGE_ATTN = False
 try:
     from sageattention import sageattn
     import torch.nn.functional as F
-    F.scaled_dot_product_attention = sageattn
+    _original_sdpa = F.scaled_dot_product_attention
+
+    def _sage_or_fallback(q, k, v, **kwargs):
+        """Use SageAttention for fp16/bf16, fall back to SDPA for other dtypes.
+
+        The TTS vocoder (stepaudio2/cosyvoice2) uses float32 tensors which
+        SageAttention does not support. This wrapper routes those calls to
+        the original PyTorch SDPA while the LLM (fp16) uses SageAttention.
+        """
+        if q.dtype in (torch.float16, torch.bfloat16):
+            return sageattn(q, k, v, **kwargs)
+        return _original_sdpa(q, k, v, **kwargs)
+
+    F.scaled_dot_product_attention = _sage_or_fallback
     _SAGE_ATTN = True
 except ImportError:
     pass
