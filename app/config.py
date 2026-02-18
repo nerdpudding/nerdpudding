@@ -149,3 +149,22 @@ REF_AUDIO_PATH = os.getenv("REF_AUDIO_PATH", os.path.join(MODEL_PATH, "assets", 
 # Use float16 for the Token2wav vocoder. Saves ~50% VRAM but currently crashes
 # with stepaudio2 due to dtype mismatch in flow.setup_cache(). Keep false until fixed.
 TTS_FLOAT16 = os.getenv("TTS_FLOAT16", "false").lower() == "true"
+
+# Seconds of silence after TTS audio finishes before the next inference cycle.
+# Creates natural breathing room between observations — real commentators pause.
+# Only effective when ENABLE_TTS=true. Has no effect in text-only mode.
+# 0 = no pause (next cycle starts as soon as audio finishes).
+# 1.0 = good default for natural pacing. Increase on faster GPUs if commentary
+# feels rushed. Decrease (or set to 0) on slower GPUs where inference time
+# already provides enough gap between audio segments.
+TTS_PAUSE_AFTER = float(os.getenv("TTS_PAUSE_AFTER", "1.0"))
+
+# Max tokens per inference when TTS is active. Lower = shorter audio output.
+# Controls the upper bound on how long each commentary segment can be.
+# 150 tokens ≈ 2-3 sentences ≈ 8-12 seconds of audio. Good for natural pacing.
+# Only effective when ENABLE_TTS=true. Text-only mode uses MAX_NEW_TOKENS (512).
+# Set to 0 to use MAX_NEW_TOKENS for TTS too (not recommended — can produce
+# 30+ seconds of audio per cycle, causing queue buildup).
+# On slower GPUs, consider lowering to 96-128 for faster cycle times.
+# On faster GPUs, 150-200 works well.
+TTS_MAX_NEW_TOKENS = int(os.getenv("TTS_MAX_NEW_TOKENS", "150"))

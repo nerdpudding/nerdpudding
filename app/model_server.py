@@ -22,6 +22,7 @@ from app.config import (  # noqa: E402
     REF_AUDIO_PATH,
     SUPPRESS_TOKENS,
     TTS_FLOAT16,
+    TTS_MAX_NEW_TOKENS,
     TTS_MODEL_DIR,
 )
 
@@ -169,6 +170,7 @@ class ModelServer:
 
         self._session_counter += 1
         sid = str(self._session_counter)
+        effective_max_tokens = TTS_MAX_NEW_TOKENS if TTS_MAX_NEW_TOKENS > 0 else MAX_NEW_TOKENS
 
         msg = {"role": "user", "content": frames + [instruction]}
         self.model.streaming_prefill(
@@ -183,7 +185,7 @@ class ModelServer:
             session_id=sid,
             generate_audio=True,
             use_tts_template=True,
-            max_new_tokens=MAX_NEW_TOKENS,
+            max_new_tokens=effective_max_tokens,
             do_sample=True,
         ):
             if wav_chunk is None and text_chunk is None:

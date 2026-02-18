@@ -7,6 +7,7 @@ subscribers via async queues (same pub/sub pattern as MonitorLoop).
 
 import asyncio
 import logging
+import time
 from typing import Optional
 
 import numpy as np
@@ -17,10 +18,22 @@ logger = logging.getLogger(__name__)
 
 
 class AudioManager:
-    """Receives TTS audio, resamples, and delivers to consumers."""
+    """Receives TTS audio, resamples, and delivers to consumers.
+
+    Also tracks an audio clock to estimate when the browser finishes
+    playing the current cycle's audio. Used by MonitorLoop to gate
+    the next inference cycle (prevents queue buildup / drift).
+    """
+
+    # Output format after resample_to_48k_int16()
+    SAMPLE_RATE = 48000
+    BYTES_PER_SAMPLE = 2  # int16
 
     def __init__(self):
         self._subscribers: set[asyncio.Queue[Optional[bytes]]] = set()
+        # Audio clock — tracks playback timing per cycle
+        self._first_publish_time: Optional[float] = None
+        self._audio_seconds: float = 0.0
 
     def subscribe(self) -> asyncio.Queue[Optional[bytes]]:
         """Subscribe to audio events. Returns a queue that receives:
@@ -39,9 +52,33 @@ class AudioManager:
         logger.debug(f"Audio subscriber removed (total: {len(self._subscribers)})")
 
     def publish(self, data: Optional[bytes]) -> None:
-        """Send audio data to all subscribers. Call from event loop thread."""
+        """Send audio data to all subscribers. Also tracks audio clock.
+
+        NOTE: data is ALREADY resampled 48kHz int16 PCM (via
+        resample_to_48k_int16() in monitor_loop._inference_worker).
+        So len(data) / (SAMPLE_RATE * BYTES_PER_SAMPLE) = seconds of audio.
+        """
+        if data is not None:
+            if self._first_publish_time is None:
+                self._first_publish_time = time.time()
+            self._audio_seconds += len(data) / (self.SAMPLE_RATE * self.BYTES_PER_SAMPLE)
         for q in self._subscribers:
             q.put_nowait(data)
+
+    def reset_clock(self) -> None:
+        """Reset audio clock for a new cycle. Call at cycle start."""
+        self._first_publish_time = None
+        self._audio_seconds = 0.0
+
+    @property
+    def estimated_playback_end(self) -> float:
+        """Wall-clock time when the browser is estimated to finish playing.
+
+        Returns 0.0 if no audio was published this cycle (no waiting needed).
+        """
+        if self._first_publish_time is None:
+            return 0.0
+        return self._first_publish_time + self._audio_seconds
 
     def stop(self) -> None:
         """Send stop signal to all subscribers."""

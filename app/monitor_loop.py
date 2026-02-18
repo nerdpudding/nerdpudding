@@ -16,6 +16,7 @@ from app.config import (
     INFERENCE_INTERVAL,
     STREAM_DELAY_EMA_ALPHA,
     STREAM_DELAY_INIT,
+    TTS_PAUSE_AFTER,
 )
 from app.model_server import ModelServer
 from app.sliding_window import SlidingWindow
@@ -117,20 +118,44 @@ class MonitorLoop:
         for q in self._subscribers:
             q.put_nowait(item)
 
-    def _scene_changed(self, current_frame: Image.Image) -> bool:
-        """Check if the scene changed enough to warrant a new inference cycle."""
+    def _scene_diff(self, current_frame: Image.Image) -> float:
+        """Compute mean pixel difference from last inference frame.
+
+        Returns 255.0 if no previous frame (first cycle).
+        Returns float in range 0-255.
+        """
         if self._last_inference_frame is None:
-            return True
+            return 255.0
         try:
             old = np.array(self._last_inference_frame.resize((64, 64)), dtype=np.float32)
             new = np.array(current_frame.resize((64, 64)), dtype=np.float32)
             diff = float(np.mean(np.abs(old - new)))
             logger.debug(f"Scene diff: {diff:.1f} (threshold: {CHANGE_THRESHOLD})")
-            return diff > CHANGE_THRESHOLD
+            return diff
         except Exception:
-            return True
+            return 255.0
 
-    def _build_prompt(self, instruction: str) -> str:
+    def _commentary_intensity(self, scene_diff: float) -> str:
+        """Determine commentary length hint based on scene diff and recent history.
+
+        Uses two signals:
+        1. Pixel diff (visual change) — fast, no extra inference cost
+        2. Previous response length (semantic signal) — if the model's last
+           response was short, it saw nothing interesting
+
+        Returns: 'minimal', 'brief', or 'normal'.
+        """
+        prev_len = len(self._last_response.strip()) if self._last_response else 0
+        prev_was_short = prev_len < 40  # "..." is 3, a short phrase is ~20-40 chars
+
+        if scene_diff < 15 and prev_was_short:
+            return "minimal"
+        elif scene_diff < 15 or (scene_diff < 40 and prev_was_short):
+            return "brief"
+        else:
+            return "normal"
+
+    def _build_prompt(self, instruction: str, scene_diff: float = 255.0) -> str:
         """Build the full prompt with commentator system message and context."""
         parts = [COMMENTATOR_PROMPT]
         if self._last_response and self._last_response.strip() != "...":
@@ -138,6 +163,12 @@ class MonitorLoop:
                 f'\nYour last comment was: "{self._last_response}"\n'
                 "Do not repeat this. Only add new observations."
             )
+        if self._model.tts_enabled:
+            intensity = self._commentary_intensity(scene_diff)
+            if intensity == "minimal":
+                parts.append("\nVery little changed. Be extremely brief — one short phrase at most.")
+            elif intensity == "brief":
+                parts.append("\nSome things changed. Keep it to one sentence.")
         parts.append(f"\nFocus: {instruction}")
         return "\n".join(parts)
 
@@ -180,26 +211,38 @@ class MonitorLoop:
             # Change detection: skip if scene hasn't changed enough
             newest_frame = frame_metas[-1].image
             instruction_changed = self._instruction != self._last_instruction
-            if not instruction_changed and not self._scene_changed(newest_frame):
-                logger.info("Scene unchanged, skipping cycle")
+            scene_diff = self._scene_diff(newest_frame)
+            if not instruction_changed and scene_diff < CHANGE_THRESHOLD:
+                logger.info(f"Scene unchanged (diff={scene_diff:.1f}), skipping cycle")
                 continue
 
             self._last_instruction = self._instruction
-            await self._run_cycle(frame_metas, self._instruction)
+            await self._run_cycle(frame_metas, self._instruction, scene_diff)
+
+            # Audio gate: wait for browser to finish playing + breathing pause
+            if self._audio_manager is not None:
+                playback_end = self._audio_manager.estimated_playback_end
+                remaining = playback_end - time.time() + TTS_PAUSE_AFTER
+                if remaining > 0:
+                    logger.info(f"Audio gate: waiting {remaining:.1f}s (playback + pause)")
+                    await asyncio.sleep(remaining)
 
         self._running = False
         self._started.clear()
         logger.info("Monitor loop stopped")
 
-    async def _run_cycle(self, frame_metas: list, instruction: str) -> None:
+    async def _run_cycle(self, frame_metas: list, instruction: str,
+                         scene_diff: float = 255.0) -> None:
         """Run one inference cycle in a thread pool."""
         self._generating = True
         self._cycle_count += 1
+        if self._audio_manager is not None:
+            self._audio_manager.reset_clock()
         cycle_num = self._cycle_count
         frame_ids = [m.frame_id for m in frame_metas]
         frame_timestamps = [m.timestamp for m in frame_metas]
         images = [m.image for m in frame_metas]
-        prompt = self._build_prompt(instruction)
+        prompt = self._build_prompt(instruction, scene_diff)
         label = instruction[:50] + "..." if len(instruction) > 50 else instruction
         logger.info(f"Cycle {cycle_num}: {len(images)} frames (#{frame_ids[0]}-#{frame_ids[-1]}), instruction='{label}'")
 
@@ -231,15 +274,39 @@ class MonitorLoop:
         """Runs in thread pool. Streams chunks to all subscribers. Returns full response."""
         chunks = []
         if self._model.tts_enabled:
+            # Buffer audio until we know the response is not "..." (skip signal).
+            # The Token2wav vocoder produces Chinese speech artifacts on "...",
+            # so we suppress audio for skip responses entirely.
+            audio_buffer = []
+            streaming_audio = False
             for result in self._model.infer_with_audio(frames, prompt):
                 if result.text:
                     chunks.append(result.text)
                     loop.call_soon_threadsafe(self._publish, result.text)
-                if result.audio is not None and self._audio_manager is not None:
-                    pcm = AudioManager.resample_to_48k_int16(result.audio)
-                    loop.call_soon_threadsafe(self._audio_manager.publish, pcm)
+                    # Once accumulated text exceeds skip signal, flush audio buffer
+                    if not streaming_audio and len("".join(chunks).strip()) > 5:
+                        streaming_audio = True
+                        if self._audio_manager is not None:
+                            for buffered in audio_buffer:
+                                pcm = AudioManager.resample_to_48k_int16(buffered)
+                                loop.call_soon_threadsafe(self._audio_manager.publish, pcm)
+                        audio_buffer.clear()
+                if result.audio is not None:
+                    if streaming_audio and self._audio_manager is not None:
+                        pcm = AudioManager.resample_to_48k_int16(result.audio)
+                        loop.call_soon_threadsafe(self._audio_manager.publish, pcm)
+                    elif not streaming_audio:
+                        audio_buffer.append(result.audio)
                 if result.is_last:
                     break
+            # Flush remaining buffer if response was real (not "...")
+            full_text = "".join(chunks).strip()
+            if full_text != "..." and audio_buffer and self._audio_manager is not None:
+                for buffered in audio_buffer:
+                    pcm = AudioManager.resample_to_48k_int16(buffered)
+                    loop.call_soon_threadsafe(self._audio_manager.publish, pcm)
+            if full_text == "...":
+                logger.debug("Skip response '...' — audio suppressed")
         else:
             for chunk in self._model.infer(frames, prompt, stream=True):
                 chunks.append(chunk)
