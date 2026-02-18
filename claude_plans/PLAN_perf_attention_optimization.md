@@ -144,9 +144,29 @@ Users who have issues just `pip uninstall sageattention`.
 3. Run Sniper preset → compare inference times vs baseline
 4. Uninstall sageattention → confirm fallback works cleanly
 
+## Documentation (do when implementing install guides)
+
+- README quick start: mention SageAttention is auto-detected, no action needed for Docker
+- README troubleshooting: "if inference seems slow, check server log for SageAttention enabled"
+- Install guide (non-Docker): optional pip install command for power users
+- Docker guide: nothing needed, it's baked in
+
+## Test result: SageAttention v1 is SLOWER (2026-02-18)
+
+Tested v1.0.6 (pip) with Sniper preset (512 image tokens, TTS enabled).
+Result: ~50% slower than PyTorch SDPA flash baseline. Uninstalled.
+
+Cause: PyTorch 2.7 SDPA flash kernels are native CUDA, well-optimized for Ada.
+SageAttention v1 Triton JIT kernels add overhead that doesn't pay off at our
+short sequence lengths (~700 tokens).
+
+**v1 is ruled out.** Only v2 (INT4+FP8, compiled CUDA) is worth trying.
+Test v2 in Docker build only — don't bother with local source compilation.
+If v2 is also slower, drop SageAttention entirely and keep SDPA flash.
+
 ## Open questions
 
-- Does SageAttention v2 `pip install` from source work on our stack (PyTorch 2.7.1)?
-  Need to test. If not, fall back to v1 (pip 1.0.6) which is still ~15-20% gain.
-- Exact pip package: the v2 code may be in a branch or the main repo. Need to check
-  which branch/tag to clone for v2 vs v1.
+- Does SageAttention v2 perform better than v1 at short sequences (~700 tokens)?
+  The compiled CUDA kernels (vs Triton JIT) may make the difference.
+- Which branch/tag of the repo contains v2 code?
+- If v2 is also slower: accept SDPA flash as the optimal backend and close this plan.

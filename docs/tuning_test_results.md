@@ -7,7 +7,7 @@
 **Image tokens/cycle:** 10 * 128 = 1280
 **Source:** HTTP MJPEG webcam stream (localhost:8088), default commentator profile
 **Instruction:** "Describe any movement or action..."
-**TTS:** disabled
+**TTS:** enabled
 
 ### Results (16 cycles)
 
@@ -49,7 +49,7 @@ With MiniCPM-o 4.5 AWQ on RTX 4090:
 **Image tokens/cycle:** 6 * 128 = 768
 **Source:** HTTP MJPEG webcam stream (localhost:8088), default commentator profile
 **Instruction:** "Describe any movement or action..."
-**TTS:** disabled
+**TTS:** enabled
 
 ### Results (7 cycles, #21-#27)
 
@@ -90,7 +90,7 @@ Better than Beast but inference still not consistently under 5s. Two changes for
 **Image tokens/cycle:** 4 * 128 = 512
 **Source:** HTTP MJPEG webcam stream (localhost:8088), default commentator profile
 **Instruction:** "Name every object the person touches, holds, or picks up. Describe what they do with it."
-**TTS:** disabled
+**TTS:** enabled
 
 ### Results (18 cycles)
 
@@ -136,3 +136,45 @@ This is the sweet spot for the current hardware. 512 image tokens keeps inferenc
 **512 image tokens (4 frames * SLICE=2) is the sweet spot on RTX 4090 AWQ INT4.**
 - Inference consistently 2.5-4.5s
 - Instruction wording matters as much as model parameters for output quality
+
+---
+
+## Test 4: SageAttention v1 — monkey-patch test (2026-02-18)
+
+**Combo:** Sniper tuned (same as test 3) + SageAttention v1.0.6
+**Settings:** SLICE=2, 4 frames/cycle, stride=1, 5 FPS capture, CHANGE_THRESHOLD=0
+**Image tokens/cycle:** 4 * 128 = 512
+**Attention:** SageAttention v1 (INT8 Q,K quantization via Triton JIT)
+**Source:** HTTP MJPEG webcam stream (localhost:8088), default commentator profile
+**Instruction:** "Name every object the person touches, holds, or picks up."
+**TTS:** enabled
+
+### Results (6 cycles, #19-#24)
+
+| Metric | Min | Max | Typical |
+|--------|-----|-----|---------|
+| Inference time | 3.41s | 6.76s | 4.2-5.6s |
+| Latency | 4.24s | 7.46s | 5.0-6.4s |
+| Sync delay (EMA) | 4.77s | 5.32s | ~5.0s |
+
+### Comparison with baseline (test 3, same preset, no SageAttention)
+
+| | Baseline (SDPA flash) | SageAttention v1 |
+|--|---|---|
+| Inference (typ) | 2.5-4.2s | 4.2-5.6s |
+| Latency (typ) | 3.5-5.0s | 5.0-6.4s |
+| Skip ("...") time | 1.4-2.5s | 3.4s |
+
+### Verdict: SLOWER, not faster
+
+SageAttention v1 made inference ~50% slower on this workload. Uninstalled.
+Exact cause unclear — could be short sequence lengths (~700 tokens), AWQ model
+interaction, Triton JIT overhead, or a combination. PyTorch SDPA flash is
+simply faster here.
+
+SageAttention v2 (INT4+FP8, compiled CUDA kernels) may perform differently.
+To be tested in Docker build during Sprint 3.
+
+### Key takeaway
+
+Always benchmark. SageAttention v1 does not help this specific workload.
