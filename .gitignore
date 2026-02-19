@@ -48,3 +48,7 @@ models/
 
 # Temporary webcam setup folder (not part of project)
 webcam/
+
+# Large test videos
+test_files/videos/soccer_match.mp4
+test_files/videos/test2.mp4
