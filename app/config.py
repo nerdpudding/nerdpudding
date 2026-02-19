@@ -125,7 +125,8 @@ MAX_NEW_TOKENS = int(os.getenv("MAX_NEW_TOKENS", "512"))
 #   WINDOW_SIZE          Ring buffer capacity. Must be >= FRAMES_PER_INFERENCE
 #                        * FRAME_STRIDE + some margin for the adaptive sync.
 #
-#   CHANGE_THRESHOLD     Pixel difference threshold (0-255) to detect scene change.
+#   CHANGE_THRESHOLD     Mean pixel difference threshold to detect scene change.
+#                        Theoretical range 0-255, practical range 0-50.
 #                        Below this = "nothing changed", cycle skipped.
 #                        5.0 = only reacts to obvious changes (misses subtle ones).
 #                        2.0 = reacts to small movements (more cycles, more responsive).
@@ -156,7 +157,8 @@ MAX_NEW_TOKENS = int(os.getenv("MAX_NEW_TOKENS", "512"))
 #
 # ---- PRESET A: Sentry ----
 # Best for: slow-changing scenes, security cams, nature, saving compute.
-# Time window: 4s | Captures every 500ms | 256 image tokens/cycle
+# Time window: 4s | Captures every 500ms
+# Tokens/cycle: 256 (SLICE=1) or 512 (SLICE=2)
 # High threshold: only reacts to big changes (person entering, car passing).
 # CAPTURE_FPS = float(os.getenv("CAPTURE_FPS", "2.0"))
 # FRAMES_PER_INFERENCE = int(os.getenv("FRAMES_PER_INFERENCE", "4"))
@@ -182,7 +184,8 @@ TTS_PAUSE_AFTER = float(os.getenv("TTS_PAUSE_AFTER", "0.5"))
 
 # ---- PRESET C: Owl ----
 # Best for: general use — catches fast movements AND has broad context.
-# Time window: 4s | Captures every 250ms | 512 image tokens/cycle
+# Time window: 4s | Captures every 250ms
+# Tokens/cycle: 512 (SLICE=1) or 1024 (SLICE=2)
 # Low threshold: reacts to most changes.
 # CAPTURE_FPS = float(os.getenv("CAPTURE_FPS", "4.0"))
 # FRAMES_PER_INFERENCE = int(os.getenv("FRAMES_PER_INFERENCE", "8"))
@@ -195,7 +198,8 @@ TTS_PAUSE_AFTER = float(os.getenv("TTS_PAUSE_AFTER", "0.5"))
 
 # ---- PRESET D: Beast ----
 # Best for: RTX 4090 with VRAM to spare, want the AI to see everything.
-# Time window: 4s | Captures every 200ms | 640 image tokens/cycle
+# Time window: 4s | Captures every 200ms
+# Tokens/cycle: 640 (SLICE=1) or 1280 (SLICE=2)
 # No threshold: every cycle runs, never skips. Fastest possible reactions.
 # CAPTURE_FPS = float(os.getenv("CAPTURE_FPS", "5.0"))
 # FRAMES_PER_INFERENCE = int(os.getenv("FRAMES_PER_INFERENCE", "10"))

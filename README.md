@@ -238,7 +238,7 @@ See the [Project hierarchy](AI_INSTRUCTIONS.md#project-hierarchy) in AI_INSTRUCT
 
 ## Current Status
 
-**Sprint 3 in progress.** Sprint 2 delivered the full end-to-end pipeline (see [Sprint 2 Review](docs/sprint2/SPRINT2_REVIEW.md)). Sprint 3 has added HTTP MJPEG stream support, prompt profiles (switchable AI personalities), a config preset system (Sentry/Sniper/Owl/Beast), and performance investigation (SDPA flash confirmed as optimal attention backend).
+**Sprint 3 in progress.** Sprint 2 delivered the full end-to-end pipeline (see [Sprint 2 Review](docs/sprint2/SPRINT2_REVIEW.md)). Sprint 3 has added HTTP MJPEG stream support, prompt profiles (switchable AI personalities), a config preset system (Sentry/Sniper/Owl/Beast), performance investigation (SDPA flash confirmed as optimal attention backend), and `torch.compile()` optimization.
 
 | Metric | Text-only | With TTS |
 |--------|-----------|----------|

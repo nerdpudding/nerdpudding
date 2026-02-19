@@ -93,6 +93,8 @@ For non-trivial changes, follow this order:
 ├── concepts/
 │   └── concept.md                    # Detailed concept: architecture, model selection, constraints
 ├── docs/                             # Guides, tutorials, and reference documentation
+│   ├── tuning_guide.md               # Per-GPU settings, presets, TTS pacing, prompt tips
+│   ├── tuning_test_results.md        # Preset benchmarks, attention backend comparisons
 │   ├── model_patches.md              # Patches applied to model files (must reapply after update)
 │   ├── lessons_learned.md            # What worked and didn't (context for AI assistants)
 │   ├── sprint1/                      # Sprint 1 deliverables
