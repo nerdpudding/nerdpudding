@@ -7,7 +7,7 @@
 
 Real-time AI video commentary with text-to-speech. Point it at a football match, a security camera, a nature stream, or any video source — and get a live AI commentator that sees, understands, and speaks about what's happening. Runs locally on your GPU, no cloud needed.
 
-**Status:** Sprint 3 in progress. Core pipeline works end-to-end: video in, text + TTS audio out, with adaptive pacing. Now adding HTTP MJPEG support, prompt profiles, config presets, and Docker. See [Roadmap](#current-status) for details.
+**Status:** Sprint 3 in progress. Core pipeline works end-to-end: video in, text + TTS audio out, with adaptive pacing. HTTP MJPEG input, prompt profiles, and config presets are done. Now working on Docker setup, LiveKit WebRTC, and input robustness. See [Roadmap](#current-status) for details.
 
 ## Table of Contents
 
@@ -238,7 +238,7 @@ See the [Project hierarchy](AI_INSTRUCTIONS.md#project-hierarchy) in AI_INSTRUCT
 
 ## Current Status
 
-**Sprint 2 complete.** Full end-to-end pipeline: video in, text + TTS audio out, with adaptive pacing and scene-weighted commentary density. See [Sprint 2 Review](docs/sprint2/SPRINT2_REVIEW.md) for detailed findings.
+**Sprint 3 in progress.** Sprint 2 delivered the full end-to-end pipeline (see [Sprint 2 Review](docs/sprint2/SPRINT2_REVIEW.md)). Sprint 3 has added HTTP MJPEG stream support, prompt profiles (switchable AI personalities), a config preset system (Sentry/Sniper/Owl/Beast), and performance investigation (SDPA flash confirmed as optimal attention backend).
 
 | Metric | Text-only | With TTS |
 |--------|-----------|----------|
@@ -248,7 +248,7 @@ See the [Project hierarchy](AI_INSTRUCTIONS.md#project-hierarchy) in AI_INSTRUCT
 | Display frame rate | Native (~24 FPS via MJPEG) | Same |
 | Commentary output | Streaming text (SSE) | Text + audio (Web Audio API) |
 
-**Next:** Docker setup, LiveKit WebRTC, remaining input robustness, UI polish.
+**Next:** Docker setup, LiveKit WebRTC, input robustness, UI polish.
 
 ## Documentation
 

@@ -57,6 +57,7 @@ Moved from Sprint 2 (Steps 5-8). Focuses on deployment, browser-native input, an
 - [ ] Monitoring and alerting use case prototype
 - [ ] Recording / logging (save commentary + timestamps)
 - [ ] Persistent configuration (.env file support or config UI)
+- [ ] Systematic tuning (controlled test plan per preset/scenario, validate preset values, prompt impact analysis, document recommended configurations)
 - [ ] MiniCPM-V 4.5 vision-only mode (no TTS, 3D-Resampler: 6 frames → 64 tokens, much faster + external TTS e.g. Kokoro — first benchmark how much faster V model actually is)
 - [ ] SGLang inference backend (RadixAttention prefix caching, ~10-20% faster)
 - [ ] TensorRT-LLM inference backend (compiled model, potentially ~30-50% faster)

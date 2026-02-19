@@ -10,22 +10,80 @@ Or use a `.env` file with your preferred settings.
 
 ## Quick Reference
 
-| Setting | Default | Range | Purpose |
-|---------|---------|-------|---------|
-| `ENABLE_TTS` | false | true/false | Enable text-to-speech audio output |
-| `TTS_MAX_NEW_TOKENS` | 150 | 64-512 | Max response length with TTS (tokens) |
-| `TTS_PAUSE_AFTER` | 1.0 | 0-5.0 | Silence between commentary segments (seconds) |
-| `MAX_NEW_TOKENS` | 512 | 128-1024 | Max response length without TTS (tokens) |
-| `INFERENCE_INTERVAL` | 1.0 | 0.5-10.0 | Min pause between inference cycles (seconds) |
-| `CHANGE_THRESHOLD` | 5.0 | 0-50 | Scene change sensitivity (pixel diff, 0-255) |
-| `FRAMES_PER_INFERENCE` | 4 | 1-8 | Frames sent per cycle (more = more context, slower) |
-| `FRAME_STRIDE` | 2 | 1-4 | Skip every Nth frame (higher = wider time span) |
-| `CAPTURE_FPS` | 2.0 | 0.5-5.0 | Inference capture rate (not display rate) |
-| `MAX_SLICE_NUMS` | 1 | 1-9 | Image detail level (1=fast, higher=detailed+slow) |
-| `STREAM_DELAY_INIT` | 5.0 | 0-15.0 | Initial video-commentary sync delay (0=no sync) |
-| `MODEL_PATH` | models/MiniCPM-o-4_5-awq | path | Model directory |
-| `SERVER_HOST` | 127.0.0.1 | IP address | Bind address (use `0.0.0.0` for network/Docker) |
-| `SERVER_PORT` | 8199 | port number | Server port |
+Settings are grouped in `app/config.py` into **GPU presets** (detail level) and **tune presets** (capture/pacing). The active combo determines what values you get out of the box. See [Presets](#presets) below for all combinations.
+
+| Setting | Range | Purpose |
+|---------|-------|---------|
+| `ENABLE_TTS` | true/false | Enable text-to-speech audio output |
+| `TTS_MAX_NEW_TOKENS` | 64-512 | Max response length with TTS (tokens) |
+| `TTS_PAUSE_AFTER` | 0-5.0 | Silence between commentary segments (seconds) |
+| `MAX_NEW_TOKENS` | 128-1024 | Max response length without TTS (tokens) |
+| `INFERENCE_INTERVAL` | 0.5-10.0 | Min pause between inference cycles (seconds) |
+| `CHANGE_THRESHOLD` | 0-50 | Scene change sensitivity (pixel diff, 0=never skip) |
+| `FRAMES_PER_INFERENCE` | 1-8 | Frames sent per cycle (more = more context, slower) |
+| `FRAME_STRIDE` | 1-4 | Skip every Nth frame (higher = wider time span) |
+| `CAPTURE_FPS` | 0.5-5.0 | Inference capture rate (not display rate) |
+| `MAX_SLICE_NUMS` | 1-9 | Image detail level (1=fast, higher=detailed+slow) |
+| `STREAM_DELAY_INIT` | 0-15.0 | Initial video-commentary sync delay (0=no sync) |
+| `MODEL_PATH` | path | Model directory (default: `models/MiniCPM-o-4_5-awq`) |
+| `SERVER_HOST` | IP address | Bind address (default: `127.0.0.1`, use `0.0.0.0` for network/Docker) |
+| `SERVER_PORT` | port number | Server port (default: `8199`) |
+
+## Presets
+
+`config.py` organizes tuning into two layers that combine into a **combo**:
+
+1. **GPU preset** — controls image detail level (`MAX_SLICE_NUMS`, `MAX_INP_LENGTH`)
+2. **Tune preset** — controls frame capture, pacing, and responsiveness
+
+To switch: uncomment the desired preset block in `config.py` and restart. Or override individual settings via environment variables without editing the file.
+
+### GPU presets
+
+| Setting | Conservative | Push it | Maximum |
+|---------|-------------|---------|---------|
+| `MAX_SLICE_NUMS` | 1 (64 tok/frame) | 2 (128 tok/frame) | 3 (192 tok/frame) |
+| `MAX_INP_LENGTH` | 4352 | 8192 | 8192 |
+| Best for | 10-12 GB GPUs | RTX 4090 (24 GB) | Only if SLICE=2 misses detail |
+
+### Tune presets
+
+| Setting | A: Sentry | B: Sniper | C: Owl | D: Beast |
+|---------|-----------|-----------|--------|----------|
+| `CAPTURE_FPS` | 2.0 | 5.0 | 4.0 | 5.0 |
+| `FRAMES_PER_INFERENCE` | 4 | 4 | 8 | 10 |
+| `FRAME_STRIDE` | 2 | 1 | 2 | 2 |
+| `CHANGE_THRESHOLD` | 5.0 | 0 | 1.0 | 0 |
+| `INFERENCE_INTERVAL` | 1.0 | 0.5 | 0.5 | 0.5 |
+| `TTS_MAX_NEW_TOKENS` | 150 | 96 | 120 | 96 |
+| `TTS_PAUSE_AFTER` | 1.0 | 0.5 | 0.5 | 0.3 |
+| Time window | 4s | 0.8s | 4s | 4s |
+| Image tokens (SLICE=2) | 512 | 512 | 1024 | 1280 |
+| Intended for | Slow scenes, security | Fast action, webcam | Broad context, meetings | Max input, powerful GPU |
+
+### Combos (GPU + Tune)
+
+| Combo | GPU preset | Tune preset | Image tokens/cycle |
+|-------|-----------|-------------|-------------------|
+| Sentry | Conservative | A: Sentry | 256 |
+| Sniper Lite | Conservative | B: Sniper | 256 |
+| **Sniper** | **Push it** | **B: Sniper** | **512** |
+| Owl | Push it | C: Owl | 1024 |
+| Beast | Push it | D: Beast | 1280 |
+
+### Important: presets are starting points, not optimized configurations
+
+These presets have **not been systematically validated** across different scenarios. They provide reasonable starting points based on the hardware constraints, but the actual values may need adjustment depending on your specific use case, video content, and preferences.
+
+What we know from testing (see [Tuning Test Results](tuning_test_results.md) for full data):
+
+- **512 image tokens/cycle** (Sniper + Push it) is the sweet spot on RTX 4090 AWQ — inference consistently 2.5-4.5s
+- **1280 tokens** (Beast + Push it) is too slow on RTX 4090 — inference 6-8s, latency 10-13s. May work on faster hardware.
+- **768 tokens** (6 frames at SLICE=2) is borderline — inference 4-5.5s, inconsistently under the 5s target
+- Instruction wording has as much impact on output quality as parameter tuning
+- Systematic tuning with controlled test plans is on the [roadmap](../roadmap.md)
+
+Tuning involves many interacting factors (frame count, detail level, threshold, TTS length, prompting, video content type). Expect to experiment.
 
 ## Video Sources
 
@@ -64,15 +122,17 @@ Not supported directly (DRM, dynamic URLs). Use `yt-dlp -g <url>` to extract the
 
 ### Scene detection by source type
 
-Different sources produce different levels of visual change. Adjust `CHANGE_THRESHOLD` accordingly:
+Different sources produce different levels of visual change. Adjust `CHANGE_THRESHOLD` accordingly.
 
-| Source type | Suggested threshold | Why |
+**Important:** These suggestions are rough guidelines. Testing showed that webcam scenes with a mostly static background (person at desk) produce very low mean pixel difference even with movement — threshold values like 3.0-5.0 caused most cycles to skip. Set to `0` (never skip) when in doubt, then increase if the AI talks too much about nothing.
+
+| Source type | Suggested starting point | Notes |
 |---|---|---|
-| Sports broadcast | 5.0-8.0 | Frequent camera cuts and pans |
-| Animation / gaming | 5.0 (default) | Consistent visual changes |
+| Sports broadcast | 5.0-8.0 | Frequent camera cuts produce high diff |
+| Animation / gaming | 3.0-5.0 | Consistent visual changes |
 | Security camera (static) | 8.0-15.0 | Skip lighting changes, react to movement |
-| Live webcam | 3.0-5.0 | Camera shake creates constant small changes |
-| Phone camera (handheld) | 3.0-5.0 | Hand movement causes high baseline diff |
+| Live webcam (person at desk) | 0-2.0 | Mostly static background suppresses diff; start at 0 |
+| Phone camera (handheld) | 0-2.0 | Constant hand movement; threshold may fight with noise |
 
 ## VRAM Usage
 
@@ -196,3 +256,14 @@ Tips:
 - For TTS: shorter instructions tend to produce more concise audio
 - For sports: explain scoreboard layout so the model reads it correctly
 - Use "stay silent" / "only speak when" to reduce unnecessary commentary
+
+The web UI also has a **prompt profile dropdown** with predefined system prompts (General, Sports, Security, Nature, Descriptive). These set the AI's personality — you can switch live without restarting. Profiles are defined in `app/config.py` under `PROMPT_PROFILES`.
+
+## Test Results
+
+For detailed benchmark data on different preset combinations and attention backends, see [Tuning Test Results](tuning_test_results.md). Key findings:
+
+- Sniper (512 tokens, SLICE=2) is the best-performing combo on RTX 4090 AWQ: 2.5-4.5s inference
+- Beast (1280 tokens) causes 6-8s inference — too slow for interactive use on this hardware
+- SageAttention v1/v2 and Flash Attention 2 do not improve on PyTorch SDPA flash for this model
+- `torch.compile()` provides a modest improvement on skip responses
